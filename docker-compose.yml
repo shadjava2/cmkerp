@@ -1,8 +1,5 @@
 # Gateway CMK + Redis. Rejoint le réseau Docker de la console (cmk-console-net).
-# Ports 127.0.0.1 uniquement — n'écrase pas les autres apps.
-#
-# Profil : prod (logging, pool, sécu). La DB vient du .env
-# (mêmes identifiants que application-dev.yml : 192.168.100.254:32768).
+# Par défaut : 0.0.0.0 (LAN http://IP:8999). Localhost seul : GATEWAY_BIND_HOST=127.0.0.1
 #
 # Cloudflare : api.cmkerp.com → http://cmk-gateway:8999
 
@@ -29,7 +26,7 @@ services:
     depends_on:
       - redis
     ports:
-      - "127.0.0.1:${GATEWAY_HOST_PORT:-8999}:8999"
+      - "${GATEWAY_BIND_HOST:-0.0.0.0}:${GATEWAY_HOST_PORT:-8999}:8999"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     env_file:
