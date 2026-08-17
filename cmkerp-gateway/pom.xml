@@ -15,6 +15,7 @@
 
     <properties>
         <skip.openapi.generation>false</skip.openapi.generation>
+        <skip.stocks.verify>false</skip.stocks.verify>
         <spring-boot.version>3.5.9</spring-boot.version>
     </properties>
 
@@ -335,11 +336,24 @@
                             <goal>run</goal>
                         </goals>
                         <configuration>
+                            <skip>${skip.stocks.verify}</skip>
                             <target>
-                                <property name="stocks.jar"
+                                <property name="stocks.jar.repo"
                                     value="${settings.localRepository}/cd/shad/erp/cmk/cmkerp/cmkerp-stocks/${project.version}/cmkerp-stocks-${project.version}.jar"/>
-                                <available file="${stocks.jar}" property="stocks.jar.present"/>
-                                <fail unless="stocks.jar.present"
+                                <property name="stocks.jar.reactor"
+                                    value="${maven.multiModuleProjectDirectory}/cmkerp-stocks/target/cmkerp-stocks-${project.version}.jar"/>
+                                <available file="${stocks.jar.repo}" property="stocks.jar.repo.ok"/>
+                                <available file="${stocks.jar.reactor}" property="stocks.jar.reactor.ok"/>
+                                <condition property="stocks.jar" value="${stocks.jar.repo}">
+                                    <isset property="stocks.jar.repo.ok"/>
+                                </condition>
+                                <condition property="stocks.jar" value="${stocks.jar.reactor}">
+                                    <and>
+                                        <not><isset property="stocks.jar.repo.ok"/></not>
+                                        <isset property="stocks.jar.reactor.ok"/>
+                                    </and>
+                                </condition>
+                                <fail unless="stocks.jar"
                                     message="cmkerp-stocks-${project.version}.jar absent. Executez: mvn -pl cmkerp-stocks install"/>
                                 <zipfileset id="si.service" src="${stocks.jar}"
                                     includes="cd/shad/erp/cmk/cmkerp/stocks/stockintelligence/application/service/StockIntelligenceService.class"/>

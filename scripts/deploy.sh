@@ -59,9 +59,24 @@ ensure_network() {
   fi
 }
 
+cmd_rebuild() {
+  ensure_docker
+  need_env
+  ensure_network
+  if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    info "git pull"
+    git -C "$ROOT" pull --ff-only origin main || die "git pull échoué"
+  fi
+  info "Rebuild complet (--no-cache)"
+  "${COMPOSE[@]}" build --pull --no-cache
+  "${COMPOSE[@]}" up -d --force-recreate --remove-orphans
+  ok "Rebuild terminé — attendre boot Spring puis: ./scripts/deploy.sh test"
+}
+
 cmd_help() {
   cat <<'EOF'
   ./scripts/deploy.sh install   # 1ère fois (.env + build + up)
+  ./scripts/deploy.sh rebuild   # git pull + build --no-cache + up
   ./scripts/deploy.sh update    # git pull + rebuild + recreate
   ./scripts/deploy.sh up|down|status|logs|test|build
 
@@ -157,6 +172,7 @@ cmd_test() {
 main() {
   case "${1:-help}" in
     install) cmd_install ;;
+    rebuild) cmd_rebuild ;;
     update) cmd_update ;;
     up) cmd_up ;;
     down) cmd_down ;;
