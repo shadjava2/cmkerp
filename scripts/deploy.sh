@@ -113,6 +113,7 @@ cmd_update() {
   "${COMPOSE[@]}" build
   "${COMPOSE[@]}" up -d --force-recreate --remove-orphans
   ok "Mise à jour déployée"
+  wait_for_gateway
   cmd_test
 }
 
@@ -145,6 +146,22 @@ cmd_logs() {
   "${COMPOSE[@]}" logs -f --tail=150
 }
 
+wait_for_gateway() {
+  local port="${GATEWAY_HOST_PORT:-8999}"
+  local url="http://127.0.0.1:${port}/cmkerp-gateway/actuator/health"
+  info "Attente démarrage Spring (max ~3 min)..."
+  local i code
+  for i in $(seq 1 36); do
+    code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 12 "$url" 2>/dev/null || echo 000)"
+    if [[ "$code" == "200" ]]; then
+      ok "Gateway prêt (~$((i * 5))s)"
+      return 0
+    fi
+    sleep 5
+  done
+  die "Gateway pas prêt après 3 min — voir: docker compose logs gateway"
+}
+
 cmd_test() {
   ensure_docker; need_env
   local fail=0 port="${GATEWAY_HOST_PORT:-8999}"
@@ -156,7 +173,7 @@ cmd_test() {
   if [[ "$code" == "200" ]]; then
     ok "Gateway local actuator → HTTP $code"
   else
-    echo "${RED}✖ Gateway local → HTTP $code (http://127.0.0.1:${port}/cmkerp-gateway/actuator/health)${NC}"
+    echo "${RED}✖ Gateway local → HTTP $code — encore en démarrage ? Relancer: ./scripts/deploy.sh test${NC}"
     fail=1
   fi
   code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 8 --max-time 20 \
