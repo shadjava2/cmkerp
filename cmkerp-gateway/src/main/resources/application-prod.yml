@@ -165,11 +165,11 @@ spring:
           use_second_level_cache: true
           use_query_cache: true
           # Configuration Redis pour cache Hibernate (via Redisson)
-          # Redisson utilise le RedissonClient configuré dans RedissonHibernateConfig
           region:
             factory_class: org.redisson.hibernate.RedissonRegionFactory
-          # Les caches Hibernate seront stockés dans Redis (cache distribué partagé entre instances)
-          # Configuration Redisson dans RedissonHibernateConfig.java utilise spring.data.redis.*
+          redisson:
+            config: classpath:redisson.yaml
+          # RedissonClient Spring : RedissonHibernateConfig.java (spring.data.redis.*)
         jdbc:
           batch_size: 100 # Augmenté pour PROD (50 en DEV) - meilleure performance pour inserts massifs
           fetch_size: 250

@@ -1,0 +1,8 @@
+# Cache Hibernate L2 (profil prod) — Redis du docker-compose (service "redis")
+singleServerConfig:
+  address: "redis://redis:6379"
+  connectionMinimumIdleSize: 5
+  connectionPoolSize: 20
+  timeout: 3000
+  retryAttempts: 3
+  retryInterval: 1500
