@@ -1,0 +1,23 @@
+# Build
+**/target/
+**/.classpath
+**/.project
+**/.settings/
+**/*.iml
+.idea/
+.vscode/
+
+# Runtime / secrets
+.env
+!.env.deploy.example
+**/logs/
+**/*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local
+*.bak
+application-dev-secrets.yml
+**/application-dev-secrets.yml

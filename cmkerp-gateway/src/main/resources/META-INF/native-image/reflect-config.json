@@ -1,0 +1,21 @@
+[
+  {
+    "name": "cd.shad.erp.cmk.cmkerp.gateway.GatewayApplication",
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "cd.shad.erp.cmk.cmkerp.gateway.security.SecurityConfig",
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "cd.shad.erp.cmk.cmkerp.gateway.restcontroller.AuthController",
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true
+  }
+]
+

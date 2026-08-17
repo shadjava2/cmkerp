@@ -1,0 +1,39 @@
+# ==========================================
+# CONFIGURATION TEST - Base de données de test
+# ==========================================
+# Configuration pour les tests d'intégration
+# Utilise une base de données MySQL locale
+
+cmk:
+  datasource:
+    primary:
+      # MySQL local pour les tests (configurer via variables d'environnement si nécessaire)
+      url: ${CMK_TEST_DB_URL:jdbc:mysql://127.0.0.1:32768/cmkerp-v24dev?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+      driver-class-name: ${CMK_TEST_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+      username: ${CMK_TEST_DB_USER:shad}
+      password: ${CMK_TEST_DB_PASSWORD:SDconceptsrdc@243}
+
+spring:
+  # SQL INITIALIZATION - Désactivé pour les tests (évite la validation de connexion au démarrage)
+  sql:
+    init:
+      mode: never
+      continue-on-error: true
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  # Désactiver Kafka pour les tests
+  kafka:
+    bootstrap-servers: ${CMK_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+cmkerp:
+  kafka:
+    enabled: false
+

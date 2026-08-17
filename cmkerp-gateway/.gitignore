@@ -1,0 +1,2 @@
+# Secrets locaux (clés API) — ne jamais committer
+src/main/resources/application-dev-secrets.yml

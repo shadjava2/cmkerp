@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="approvisionnements-list"
+              language="java"
+              pageWidth="842"
+              pageHeight="595"
+              orientation="Portrait"
+              columnWidth="802"
+              leftMargin="20"
+              rightMargin="20"
+              topMargin="20"
+              bottomMargin="20">
+    <property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+
+    <!-- Paramètres globaux du rapport -->
+    <parameter name="TITRE_RAPPORT" class="java.lang.String"/>
+    <parameter name="PHARMACIE_NOM" class="java.lang.String"/>
+    <parameter name="DATE_GENERATION" class="java.lang.String"/>
+    <parameter name="TOTAL_APPROVISIONNEMENTS" class="java.lang.Integer"/>
+
+    <!-- Champs pour chaque ligne (structure plate) -->
+    <field name="numBon" class="java.lang.String"/>
+    <field name="fournisseurNom" class="java.lang.String"/>
+    <field name="pharmacieNom" class="java.lang.String"/>
+    <field name="dateBl" class="java.lang.String"/>
+    <field name="dateCreation" class="java.lang.String"/>
+    <field name="statut" class="java.lang.String"/>
+    <field name="devise" class="java.lang.String"/>
+    <field name="taux" class="java.lang.String"/>
+    <field name="approvTotalUsd" class="java.math.BigDecimal"/>
+    <field name="approvTotalConversion" class="java.math.BigDecimal"/>
+    <field name="numeroLigne" class="java.lang.Integer"/>
+    <field name="produitNom" class="java.lang.String"/>
+    <field name="quantite" class="java.lang.Float"/>
+    <field name="prixUnitaire" class="java.math.BigDecimal"/>
+    <field name="totalUsd" class="java.math.BigDecimal"/>
+    <field name="totalConversion" class="java.math.BigDecimal"/>
+
+    <!-- Groupe par approvisionnement (utilise numBon comme clé) -->
+    <group name="approvisionnementGroup">
+        <groupExpression><![CDATA[$F{numBon}]]></groupExpression>
+        <groupHeader>
+            <band height="165" splitType="Stretch" isSplitAllowed="true">
+                <!-- Séparateur visuel si ce n'est pas le premier -->
+                <line>
+                    <reportElement x="0" y="0" width="802" height="1" isPrintRepeatedValues="false"/>
+                    <graphicElement>
+                        <pen lineWidth="1.0" lineColor="#CCCCCC"/>
+                    </graphicElement>
+                </line>
+
+                <!-- Titre du bon -->
+                <staticText>
+                    <reportElement x="0" y="8" width="802" height="22"/>
+                    <textElement textAlignment="Center" verticalAlignment="Middle">
+                        <font size="16" isBold="true"/>
+                    </textElement>
+                    <text><![CDATA[BON D'APPROVISIONNEMENT]]></text>
+                </staticText>
+
+                <!-- Numéro de bon -->
+                <textField>
+                    <reportElement x="0" y="30" width="802" height="18" isPrintRepeatedValues="false"/>
+                    <textElement textAlignment="Center" verticalAlignment="Middle">
+                        <font size="13"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{numBon}]]></textFieldExpression>
+                </textField>
+
+                <!-- Informations Fournisseur -->
+                <staticText>
+                    <reportElement x="0" y="55" width="401" height="16"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <text><![CDATA[INFORMATIONS FOURNISSEUR]]></text>
+                </staticText>
+                <textField>
+                    <reportElement x="0" y="71" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Fournisseur: " + ($F{fournisseurNom} != null ? $F{fournisseurNom} : "-")]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="0" y="87" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Date BL: " + ($F{dateBl} != null ? $F{dateBl} : "-")]]></textFieldExpression>
+                </textField>
+                <textField isBlankWhenNull="true">
+                    <reportElement x="0" y="103" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{devise} != null && $F{devise}.length() > 0 ? "Devise: " + $F{devise} : ""]]></textFieldExpression>
+                </textField>
+                <textField isBlankWhenNull="true">
+                    <reportElement x="0" y="119" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{taux} != null && $F{taux}.length() > 0 ? "Taux: " + $F{taux} : ""]]></textFieldExpression>
+                </textField>
+
+                <!-- Informations Service -->
+                <staticText>
+                    <reportElement x="401" y="55" width="401" height="16"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <text><![CDATA[INFORMATIONS SERVICE]]></text>
+                </staticText>
+                <textField>
+                    <reportElement x="401" y="71" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Service: " + ($F{pharmacieNom} != null ? $F{pharmacieNom} : "-")]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="401" y="87" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Date création: " + ($F{dateCreation} != null ? $F{dateCreation} : "-")]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="401" y="103" width="401" height="16" isPrintRepeatedValues="false"/>
+                    <box>
+                        <pen lineWidth="0.5"/>
+                    </box>
+                    <textElement verticalAlignment="Middle">
+                        <font size="8"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Statut: " + ($F{statut} != null ? $F{statut} : "-")]]></textFieldExpression>
+                </textField>
+            </band>
+        </groupHeader>
+        <groupFooter>
+            <band height="70" splitType="Stretch">
+                <!-- Totaux de cet approvisionnement -->
+                <line>
+                    <reportElement x="0" y="0" width="802" height="1"/>
+                    <graphicElement>
+                        <pen lineWidth="1.0" lineColor="#CCCCCC"/>
+                    </graphicElement>
+                </line>
+                <textField>
+                    <reportElement x="500" y="8" width="140" height="16" isPrintRepeatedValues="false"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA["Total USD:"]]></textFieldExpression>
+                </textField>
+                <textField>
+                    <reportElement x="640" y="8" width="162" height="16" isPrintRepeatedValues="false"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{approvTotalUsd} != null ? "$" + $F{approvTotalUsd}.toString() : "$0.00"]]></textFieldExpression>
+                </textField>
+                <textField isBlankWhenNull="true">
+                    <reportElement x="500" y="24" width="140" height="16" isPrintRepeatedValues="false"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{approvTotalConversion} != null ? "Total Conversion:" : ""]]></textFieldExpression>
+                </textField>
+                <textField isBlankWhenNull="true">
+                    <reportElement x="640" y="24" width="162" height="16" isPrintRepeatedValues="false"/>
+                    <textElement textAlignment="Right" verticalAlignment="Middle">
+                        <font size="9" isBold="true"/>
+                    </textElement>
+                    <textFieldExpression><![CDATA[$F{approvTotalConversion} != null ? $F{approvTotalConversion}.toString() : ""]]></textFieldExpression>
+                </textField>
+            </band>
+        </groupFooter>
+    </group>
+
+    <!-- En-tête global du rapport -->
+    <title>
+        <band height="70" splitType="Stretch">
+            <staticText>
+                <reportElement x="0" y="0" width="802" height="28"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="18" isBold="true"/>
+                </textElement>
+                <text><![CDATA[LISTE DES APPROVISIONNEMENTS]]></text>
+            </staticText>
+            <textField>
+                <reportElement x="0" y="28" width="401" height="18"/>
+                <textElement>
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Service: " + ($P{PHARMACIE_NOM} != null ? $P{PHARMACIE_NOM} : "Tous les services")]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="401" y="28" width="401" height="18"/>
+                <textElement textAlignment="Right">
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Date: " + ($P{DATE_GENERATION} != null ? $P{DATE_GENERATION} : "")]]></textFieldExpression>
+            </textField>
+            <textField>
+                <reportElement x="0" y="46" width="802" height="18"/>
+                <textElement textAlignment="Center">
+                    <font size="10"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Total: " + $P{TOTAL_APPROVISIONNEMENTS} + " approvisionnement(s)"]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <!-- En-têtes des colonnes pour les lignes -->
+    <columnHeader>
+        <band height="22" splitType="Stretch">
+            <staticText>
+                <reportElement x="0" y="0" width="40" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[N°]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="40" y="0" width="280" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Produit]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="320" y="0" width="80" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Quantité]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="400" y="0" width="100" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Prix unitaire]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="500" y="0" width="120" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Total USD]]></text>
+            </staticText>
+            <staticText>
+                <reportElement x="620" y="0" width="182" height="22"/>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8" isBold="true"/></textElement>
+                <text><![CDATA[Total Conversion]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <!-- Détails : affiche les lignes (masque si numeroLigne = 0, ce qui signifie pas de lignes) -->
+    <detail>
+        <band height="20" splitType="Stretch">
+            <textField isBlankWhenNull="true">
+                <reportElement x="0" y="0" width="40" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{numeroLigne} != null ? $F{numeroLigne} : ""]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="40" y="0" width="280" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{produitNom} != null ? $F{produitNom} : ""]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="320" y="0" width="80" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Center" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{quantite} != null ? $F{quantite} : ""]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="400" y="0" width="100" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{prixUnitaire} != null ? "$" + $F{prixUnitaire}.toString() : ""]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="500" y="0" width="120" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{totalUsd} != null ? "$" + $F{totalUsd}.toString() : ""]]></textFieldExpression>
+            </textField>
+            <textField isBlankWhenNull="true">
+                <reportElement x="620" y="0" width="182" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} > 0]]></printWhenExpression>
+                </reportElement>
+                <box><pen lineWidth="0.5"/></box>
+                <textElement textAlignment="Right" verticalAlignment="Middle"><font size="8"/></textElement>
+                <textFieldExpression><![CDATA[$F{totalConversion} != null ? $F{totalConversion}.toString() : ""]]></textFieldExpression>
+            </textField>
+            <!-- Message si aucune ligne pour cet approvisionnement -->
+            <staticText>
+                <reportElement x="0" y="0" width="802" height="20">
+                    <printWhenExpression><![CDATA[$F{numeroLigne} != null && $F{numeroLigne} == 0]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="9" isItalic="true"/>
+                </textElement>
+                <text><![CDATA[Aucune ligne pour cet approvisionnement]]></text>
+            </staticText>
+        </band>
+    </detail>
+
+    <!-- Pied de page -->
+    <summary>
+        <band height="28" splitType="Stretch">
+            <textField>
+                <reportElement x="0" y="8" width="802" height="15"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8"/>
+                </textElement>
+                <textFieldExpression><![CDATA["CMK ERP - Centre Médical de Kinshasa"]]></textFieldExpression>
+            </textField>
+        </band>
+    </summary>
+
+    <!-- Message si aucune donnée -->
+    <noData>
+        <band height="40" splitType="Stretch">
+            <staticText>
+                <reportElement x="0" y="10" width="802" height="20"/>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="12"/>
+                </textElement>
+                <text><![CDATA[Aucun approvisionnement]]></text>
+            </staticText>
+        </band>
+    </noData>
+</jasperReport>

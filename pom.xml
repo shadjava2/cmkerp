@@ -1,0 +1,79 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.9</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+  <artifactId>cmkerp</artifactId>
+  <version>4.1.1</version>
+  <packaging>pom</packaging>
+
+  <name>CMK-ERP</name>
+  <description>
+    Plateforme ERP modulaire pour le Centre Médical de Kinshasa...
+  </description>
+
+  <modules>
+    <module>cmkerp-bom</module>
+    <module>cmkerp-shared-kernel</module>
+    <module>cmkerp-platform</module>
+    <module>cmkerp-gateway</module>
+    <module>cmkerp-stocks</module>
+    <module>cmkerp-pos</module>
+  </modules>
+
+  <properties>
+    <java.version>21</java.version>
+    <spring-boot.version>3.5.9</spring-boot.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+        <artifactId>cmkerp-bom</artifactId>
+        <version>${project.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <!-- Exclusion globale de commons-logging au niveau du build -->
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.4.1</version>
+        <executions>
+          <execution>
+            <id>enforce-no-commons-logging</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>commons-logging:commons-logging</exclude>
+                  </excludes>
+                  <message>commons-logging est interdit. Spring Boot 3 utilise spring-jcl. Exclure commons-logging de toutes les dépendances.</message>
+                </bannedDependencies>
+              </rules>
+              <fail>true</fail>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

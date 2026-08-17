@@ -1,0 +1,146 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+    <artifactId>cmkerp</artifactId>
+    <version>4.1.1</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+  <artifactId>cmkerp-pos</artifactId>
+  <packaging>jar</packaging>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+        <artifactId>cmkerp-bom</artifactId>
+        <version>${project.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Shared Kernel pour les exceptions, utilitaires et models partagés -->
+    <dependency>
+      <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+      <artifactId>cmkerp-shared-kernel</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Platform pour réutiliser les services communs -->
+    <dependency>
+      <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+      <artifactId>cmkerp-platform</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Stocks pour réutiliser les services produits (lecture/écriture catalogue) -->
+    <dependency>
+      <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+      <artifactId>cmkerp-stocks</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+
+    <!-- Spring Web pour les contrôleurs REST -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- API Servlet (types publics de AuthTokenExtractor — classpath IDE) -->
+    <dependency>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>provided</scope>
+    </dependency>
+
+    <!-- Validation Bean Validation -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Swagger/OpenAPI pour la documentation -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <!-- JasperReports pour la génération de rapports PDF -->
+    <dependency>
+      <groupId>net.sf.jasperreports</groupId>
+      <artifactId>jasperreports</artifactId>
+      <version>6.20.6</version>
+      <exclusions>
+        <!-- Exclure commons-logging (JasperReports l'apporte transitivement via commons-beanutils et commons-digester) -->
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+        <!-- Exclure aussi des dépendances transitives -->
+        <exclusion>
+          <groupId>commons-beanutils</groupId>
+          <artifactId>commons-beanutils</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>commons-digester</groupId>
+          <artifactId>commons-digester</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Fonts pour JasperReports -->
+    <dependency>
+      <groupId>net.sf.jasperreports</groupId>
+      <artifactId>jasperreports-fonts</artifactId>
+      <version>6.20.6</version>
+      <exclusions>
+        <!-- Exclure commons-logging si présent transitivement -->
+        <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Apache POI pour la génération de fichiers Excel -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>5.2.5</version>
+    </dependency>
+
+    <!-- Spring Boot Test Starter pour JUnit 5, Mockito, etc. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Spring Retry pour la gestion des deadlocks MySQL (requis par cmkerp-platform) -->
+    <dependency>
+      <groupId>org.springframework.retry</groupId>
+      <artifactId>spring-retry</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-aspects</artifactId>
+    </dependency>
+  </dependencies>
+</project>
+

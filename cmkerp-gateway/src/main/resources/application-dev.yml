@@ -1,0 +1,273 @@
+# ==========================================
+# CONFIGURATION DÉVELOPPEMENT
+# ==========================================
+# Secrets locaux (clé OpenAI) : application-dev-secrets.yml (voir .example)
+
+# ==========================================
+# DATASOURCES - Variables d'environnement avec valeurs par défaut DEV
+# ==========================================
+cmk:
+  datasource:
+    primary:
+      # URL JDBC optimisée MySQL 8 avec paramètres performance
+      # Optimisations ajoutées : cacheResultSetMetadata, cacheCallableStmts, enableQueryTimeouts
+      url: ${CMK_PRIMARY_DB_URL:jdbc:mysql://192.168.100.254:32768/cmkerp-v24prod?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useCompression=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&rewriteBatchedStatements=true&useLocalSessionState=true&elideSetAutoCommits=true&alwaysSendSetIsolation=false&cacheServerConfiguration=true&cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&maintainTimeStats=false}
+      username: ${CMK_PRIMARY_DB_USER:cmkroot}
+      password: ${CMK_PRIMARY_DB_PASSWORD:CMK***beach-server+++MySQL8}						
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      pool-name: CMK-ERP-PrimaryPool
+      auto-commit: false
+
+# ==========================================
+# POOL HIKARI DEV - Configuration réduite pour développement
+
+#url: ${CMK_PRIMARY_DB_URL:jdbc:mysql://192.168.100.254:32768/cmkerp-v24prod?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useCompression=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&rewriteBatchedStatements=true&useLocalSessionState=true&elideSetAutoCommits=true&alwaysSendSetIsolation=false&cacheServerConfiguration=true&cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&maintainTimeStats=false}
+     # username: ${CMK_PRIMARY_DB_USER:cmkroot}
+     # password: ${CMK_PRIMARY_DB_PASSWORD:CMK***beach-server+++MySQL8}    
+
+#url: ${CMK_PRIMARY_DB_URL:jdbc:mysql://127.0.0.1:32768/cmkerp-v24prod?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useCompression=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&rewriteBatchedStatements=true&useLocalSessionState=true&elideSetAutoCommits=true&alwaysSendSetIsolation=false&cacheServerConfiguration=true&cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&maintainTimeStats=false}
+      #username: ${CMK_PRIMARY_DB_USER:shad}
+      #password: ${CMK_PRIMARY_DB_PASSWORD:SDconceptsrdc@243}
+# ==========================================
+cmkerp:
+  db:
+    # ==========================================
+    # SLOW QUERY LOGGER - Logger applicatif
+    # ==========================================
+    slow-query-logger:
+      enabled: true # Activer le logger applicatif pour les requêtes lentes
+      threshold-ms: 500 # Seuil plus bas en dev (500ms) pour détecter plus de problèmes
+    # ==========================================
+    # SLOW QUERY LOG - Configuration MySQL
+    # ==========================================
+    slow-query-log:
+      enabled: true # Activer le slow query log en dev pour détecter les requêtes lentes
+      long-query-time-seconds: 1 # Seuil plus bas en dev (1s) pour détecter plus de problèmes
+      retention-days: 7 # Rétention des logs (7 jours)
+      log-queries-not-using-indexes: true # Logger les requêtes sans index
+    pool:
+      # Pool minimal en dev : évite "Too many connections" (DevTools + anciennes instances Java)
+      max-size: 5
+      min-idle: 1
+      connection-timeout-ms: 30000
+      validation-timeout-ms: 3000 # 3 secondes (optimisé pour validation rapide)
+      idle-timeout-ms: 600000
+      # Vérification automatique wait_timeout au démarrage par MySQLWaitTimeoutChecker
+      # max-lifetime doit être < wait_timeout MySQL (généralement 28800s = 8h)
+      max-lifetime-ms: 1800000 # 30 minutes (suffisant pour dev)
+      keepalive-time-ms: 120000 # 2 minutes
+
+  # ==========================================
+  # POOL REDIS DEV - Configuration réduite pour développement
+  # ==========================================
+  redis:
+    pool:
+      # Pool réduit pour développement (une seule instance locale)
+      max-active: 16
+      max-idle: 8
+      min-idle: 2
+      time-between-eviction-runs-ms: 30000
+      # number-of-instances: 1  # Optionnel pour dev (désactive la vérification si non configuré)
+
+  # ==========================================
+  # KAFKA DEV - Désactivé par défaut
+  # ==========================================
+  kafka:
+    enabled: false
+  async:
+    # Configuration du pool de threads async (pour @Async)
+    core-pool-size: 4 # Réduit pour dev
+    max-pool-size: 16 # Réduit pour dev
+    queue-capacity: 100 # Réduit pour dev
+  email:
+    # Configuration retry pour emails
+    max-retries: 3
+    retry-backoff-ms: 1000 # Backoff exponentiel : 1s, 2s, 4s
+  stock-intelligence:
+    # Force actif en dev (priorité sur CMK_STOCK_INTELLIGENCE_ENABLED=false en env)
+    enabled: true
+    morning-report-enabled: true
+    evening-report-enabled: true
+    run-on-startup: ${CMK_STOCK_INTELLIGENCE_RUN_ON_STARTUP:false}
+    # openai.enabled + api-key : application-dev-secrets.yml (importé ci-dessus)
+    email:
+      subject-prefix: '[CMK Stock DEV]'
+  # ==========================================
+  # MONITORING - Surveillance des transactions
+  # ==========================================
+  monitoring:
+    transaction:
+      enabled: true # Activer le monitoring des transactions longues
+      warning-threshold-ms: 1000 # Avertir si transaction > 1 seconde
+
+# ==========================================
+# JWT Configuration (pour JwtTokenProviderImpl)
+# ==========================================
+jwt:
+  secret: ${CMK_JWT_SECRET:ChangeMoi-Tres-Long-ET-Tres-Sale}
+  access-token-expiration: ${JWT_ACCESS_TOKEN_EXPIRATION:86400000} # 24 heures en DEV (session longue durée)
+  refresh-token-expiration: ${JWT_REFRESH_TOKEN_EXPIRATION:604800000} # 7 jours
+  # Validation plus permissive en dev (logs détaillés, moins strict)
+  dev:
+    relaxed-validation: true # Active les logs détaillés et une validation plus tolérante
+
+# ==========================================
+# HIKARI DEV - Debug et Monitoring
+# ==========================================
+spring:
+  config:
+    import: optional:classpath:application-dev-secrets.yml
+
+  datasource:
+    primary:
+      hikari:
+        leak-detection-threshold: 20000
+        register-mbeans: false
+
+  # ==========================================
+  # FLYWAY - Migrations DB
+  # ==========================================
+  flyway:
+    enabled: false # Base legacy : pas de Flyway auto (V4+ incompatible). DDL stock-intelligence via initializer.
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: 'Baseline du schéma CMK-ERP existant'
+    validate-on-migrate: true
+    clean-disabled: true
+    # Utilise automatiquement la datasource primaire (@Primary)
+
+  # ==========================================
+  # JPA & Logs DEV
+  # ==========================================
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        generate_statistics: false
+        # Désactiver le cache second-level en DEV si Redis n'est pas disponible
+        # Le cache sera activé automatiquement en PROD si Redis est configuré
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+
+  # Démarrage plus léger en DEV
+  # OPTIMISATION: Désactiver lazy-initialization pour éviter les ClassNotFoundException
+  # avec les classes du shared-kernel lors de l'introspection (ex: GlobalExceptionHandler)
+  # Le lazy initialization cause plus de problèmes qu'il n'en résout avec les projets multi-modules
+  main:
+    lazy-initialization: false
+
+  # ==========================================
+  # DEVTOOLS - Redémarrage automatique
+  # ==========================================
+  devtools:
+    restart:
+      # Désactivé : le restart DevTools perd les routes MVC après [restartedMain]
+      enabled: false
+      # Exclure les ressources statiques du restart
+      exclude: static/**,public/**,templates/**,META-INF/maven/**,META-INF/resources/**
+      # IMPORTANT: Exclure les classes des modules locaux du restart classloader
+      # Spring DevTools utilise un RestartClassLoader qui ne charge pas correctement
+      # les classes des modules Maven locaux. Ces classes doivent être chargées
+      # depuis le classloader principal (plus stable).
+      # Format: patterns Ant-style séparés par des virgules
+      # OPTIMISATION: Exclure les classes des modules locaux du restart classloader
+      # Ces classes seront chargées depuis le classloader principal (plus stable)
+      # Format: patterns Ant-style séparés par des virgules
+      additional-exclude: 'cd/shad/erp/cmk/cmkerp/sharedkernel/**,cd/shad/erp/cmk/cmkerp/platform/**,cd/shad/erp/cmk/cmkerp/stocks/**'
+    livereload:
+      enabled: false
+
+  # ==========================================
+  # SMTP DEV (compte de test)
+  # ==========================================
+  mail:
+    # OVH : port 465 = SSL implicite (pas STARTTLS)
+    host: smtp.mail.ovh.net
+    port: 465
+    username: cmkerp@cmk-cd.org
+    password: SDconceptsrdc@243
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: false
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+  # ==========================================
+  # SERVER ERROR HANDLING DEV
+  # ==========================================
+  web:
+    error:
+      include-message: always
+      include-binding-errors: always
+      include-stacktrace: always
+
+# ==========================================
+# LOGGING DEV - Console lisible (pas de spam Hibernate/Hikari)
+# ==========================================
+logging:
+  level:
+    root: INFO
+    cd.shad.erp.cmk.cmkerp: INFO
+    org.springframework.web: INFO
+    org.springframework.web.servlet.DispatcherServlet: INFO
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.orm: WARN
+    org.hibernate.engine: WARN
+    org.hibernate.p: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.hibernate.e.i.StatisticalLoggingSessionEventListener: WARN
+    com.zaxxer.hikari: WARN
+    com.zaxxer.hikari.pool: WARN
+    slow.query: WARN
+    http.request: INFO
+    org.springframework.data.redis.repository.configuration.RepositoryConfigurationExtensionSupport: WARN
+
+# ==========================================
+# ACTUATOR DEV - Affichage détaillé
+# ==========================================
+management:
+  health:
+    mail:
+      enabled: false
+  endpoint:
+    health:
+      show-details: always
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  # ==========================================
+  # OPENTELEMETRY - Désactivé par défaut pour éviter les erreurs "Failed to export spans"
+  # ==========================================
+  tracing:
+    enabled: false # Désactivé par défaut - activer uniquement si un collector OTLP est configuré
+    sampling:
+      probability: 1.0
+    export:
+      otlp:
+        enabled: false # Désactiver l'exporter OTLP par défaut
+  # Pour activer: définir OTEL_EXPORTER_OTLP_ENDPOINT (ex: http://localhost:4318)
+  otlp:
+    tracing:
+      enabled: ${OTEL_EXPORTER_OTLP_ENDPOINT:false}
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+
+# ==========================================
+# TOMCAT DEV - Configuration allégée
+# ==========================================
+server:
+  tomcat:
+    threads:
+      max: 500
+      min-spare: 100

@@ -1,0 +1,141 @@
+package cd.shad.erp.cmk.cmkerp.stocks.application.restcontroller;
+
+import static cd.shad.erp.cmk.cmkerp.sharedkernel.config.ApiPaths.STOCKS_BASE;
+
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import cd.shad.erp.cmk.cmkerp.sharedkernel.security.PermissionCode;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.request.ProduitRequest;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.ProduitResponse;
+import cd.shad.erp.cmk.cmkerp.stocks.application.service.ProduitCommandService;
+import cd.shad.erp.cmk.cmkerp.stocks.application.service.ProduitQueryService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+
+/**
+ * EXEMPLE : Contrôleur REST sécurisé avec @PreAuthorize.
+ *
+ * <p>
+ * Ce fichier sert d'exemple pour montrer comment utiliser @PreAuthorize pour sécuriser les endpoints.
+ * Copier les annotations dans le ProduitRestController réel.
+ *
+ * <p>
+ * Les permissions utilisées sont définies dans {@link PermissionCode} :
+ * - VIEW_STOCK : Pour les opérations de lecture
+ * - MANAGE_STOCK : Pour les opérations d'écriture (create, update, delete)
+ */
+@RestController
+@RequestMapping(STOCKS_BASE + "/products")
+@RequiredArgsConstructor
+@Tag(name = "Stocks - Produits", description = "Gestion des produits pharmaceutiques")
+@Validated
+public class ProduitRestControllerSecured {
+
+    private final ProduitQueryService produitQueryService;
+    private final ProduitCommandService produitCommandService;
+
+    /**
+     * Exemple 1 : Lecture avec permission VIEW_STOCK.
+     *
+     * Syntaxe : hasAuthority('permission_code')
+     */
+    @GetMapping
+    @PreAuthorize("hasAuthority('" + PermissionCode.VIEW_STOCK.getCode() + "')")
+    @Operation(summary = "Liste paginée des produits")
+    public ResponseEntity<?> findAll(Pageable pageable) {
+        // Implémentation...
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Exemple 2 : Création avec permission MANAGE_STOCK.
+     */
+    @PostMapping
+    @PreAuthorize("hasAuthority('" + PermissionCode.MANAGE_STOCK.getCode() + "')")
+    @Operation(summary = "Créer un produit")
+    public ResponseEntity<ProduitResponse> create(
+            @Valid @RequestBody ProduitRequest request,
+            HttpServletRequest httpRequest) {
+        // Implémentation...
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Exemple 3 : Mise à jour avec permission MANAGE_STOCK.
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('" + PermissionCode.MANAGE_STOCK.getCode() + "')")
+    @Operation(summary = "Mettre à jour un produit")
+    public ResponseEntity<ProduitResponse> update(
+            @PathVariable Long id,
+            @Valid @RequestBody ProduitRequest request,
+            HttpServletRequest httpRequest) {
+        // Implémentation...
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Exemple 4 : Suppression avec permission MANAGE_STOCK.
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('" + PermissionCode.MANAGE_STOCK.getCode() + "')")
+    @Operation(summary = "Supprimer un produit")
+    public ResponseEntity<Void> delete(@PathVariable Long id, HttpServletRequest httpRequest) {
+        // Implémentation...
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Exemple 5 : Permission conditionnelle avec opérateur OR.
+     *
+     * Syntaxe : hasAuthority('perm1') or hasAuthority('perm2')
+     */
+    @GetMapping("/{id}/details")
+    @PreAuthorize("hasAuthority('" + PermissionCode.VIEW_STOCK.getCode() + "') or hasAuthority('" + PermissionCode.MANAGE_STOCK.getCode() + "')")
+    @Operation(summary = "Détails d'un produit")
+    public ResponseEntity<?> findById(@PathVariable Long id) {
+        // Implémentation...
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Exemple 6 : Vérification de rôle (alternative aux permissions).
+     *
+     * Syntaxe : hasRole('ROLE_ADMIN')
+     * Note : Spring Security ajoute automatiquement le préfixe "ROLE_" si absent.
+     */
+    @DeleteMapping("/admin/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Supprimer un produit (admin uniquement)")
+    public ResponseEntity<Void> deleteAdmin(@PathVariable Long id) {
+        // Implémentation...
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Exemple 7 : Vérification complexe avec plusieurs conditions.
+     *
+     * Syntaxe : (condition1) and (condition2)
+     */
+    @PostMapping("/{id}/validate")
+    @PreAuthorize("hasAuthority('" + PermissionCode.MANAGE_STOCK.getCode() + "') and hasRole('PHARMACIST')")
+    @Operation(summary = "Valider un produit (pharmacien avec permission)")
+    public ResponseEntity<ProduitResponse> validate(@PathVariable Long id) {
+        // Implémentation...
+        return ResponseEntity.ok().build();
+    }
+}

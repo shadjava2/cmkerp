@@ -1,0 +1,581 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="dashboard-stat-achat-risque"
+              language="java"
+              pageWidth="842"
+              pageHeight="595"
+              orientation="Landscape"
+              columnWidth="822"
+              leftMargin="10"
+              rightMargin="10"
+              topMargin="20"
+              bottomMargin="20"
+              isIgnorePagination="false"
+              isTitleNewPage="false"
+              isSummaryNewPage="false"
+              isSummaryWithPageHeaderAndFooter="false"
+              isFloatColumnFooter="false"
+              printOrder="Vertical"
+              columnDirection="LTR"
+              whenNoDataType="NoPages"
+              whenResourceMissingType="Null">
+    <property name="com.jaspersoft.studio.data.defaultdataadapter" value="One Empty Record"/>
+    <!-- Optimisations performance -->
+    <property name="net.sf.jasperreports.print.keep.full.text" value="false"/>
+    <property name="net.sf.jasperreports.export.pdf.force.linebreak.policy" value="false"/>
+
+    <!-- Paramètres -->
+    <parameter name="TITRE_RAPPORT" class="java.lang.String"/>
+    <parameter name="PHARMACIE_NOM" class="java.lang.String"/>
+    <parameter name="DATE_GENERATION" class="java.lang.String"/>
+    <parameter name="TOTAL_PRODUITS" class="java.lang.Integer"/>
+    <parameter name="BACKGROUND_IMAGE" class="java.io.InputStream"/>
+    <parameter name="LOGO_IMAGE" class="java.io.InputStream"/>
+    <parameter name="UTILISATEUR_NOM" class="java.lang.String"/>
+
+    <!-- Champs -->
+    <field name="id" class="java.lang.Long"/>
+    <field name="codebarre" class="java.lang.String"/>
+    <field name="nomcommercial" class="java.lang.String"/>
+    <field name="nomscientifique" class="java.lang.String"/>
+    <field name="forme" class="java.lang.String"/>
+    <field name="dosage" class="java.lang.String"/>
+    <field name="conditionnement" class="java.lang.String"/>
+    <field name="categorie" class="java.lang.String"/>
+    <field name="stockencours" class="java.lang.Float"/>
+    <field name="isactif" class="java.lang.Boolean"/>
+    <field name="peremption" class="java.lang.String"/>
+    <field name="prixachat" class="java.math.BigDecimal"/>
+    <field name="qtealert" class="java.lang.Float"/>
+    <field name="qtcritique" class="java.lang.Float"/>
+    <field name="perimable" class="java.lang.Boolean"/>
+    <field name="dateApprov" class="java.time.LocalDateTime"/>
+
+    <!-- Variable pour la numérotation - utilise REPORT_COUNT qui est plus fiable -->
+
+
+    <!-- Image de fond -->
+    <background>
+        <band height="555" splitType="Stretch">
+            <image onErrorType="Blank" evaluationTime="Report">
+                <reportElement x="0" y="0" width="822" height="555" backcolor="#FFFFFF" mode="Opaque" isPrintRepeatedValues="false" isRemoveLineWhenBlank="false">
+                    <printWhenExpression><![CDATA[$P{BACKGROUND_IMAGE} != null]]></printWhenExpression>
+                </reportElement>
+                <imageExpression><![CDATA[$P{BACKGROUND_IMAGE}]]></imageExpression>
+            </image>
+        </band>
+    </background>
+
+    <!-- En-tête du rapport -->
+    <title>
+        <band height="130" splitType="Stretch">
+            <!-- Fond blanc pour l'en-tête -->
+            <rectangle>
+                <reportElement x="0" y="0" width="822" height="120" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </graphicElement>
+            </rectangle>
+
+            <!-- Logo CMK -->
+            <image onErrorType="Blank" evaluationTime="Report">
+                <reportElement x="20" y="10" width="80" height="80" mode="Opaque">
+                    <printWhenExpression><![CDATA[$P{LOGO_IMAGE} != null]]></printWhenExpression>
+                </reportElement>
+                <imageExpression><![CDATA[$P{LOGO_IMAGE}]]></imageExpression>
+            </image>
+
+            <!-- CENTRE MEDICAL DE KINSHASA -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="110" y="10" width="582" height="30" forecolor="#DC2626" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="18" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <textFieldExpression><![CDATA["CENTRE MEDICAL DE KINSHASA"]]></textFieldExpression>
+            </textField>
+
+            <!-- Titre du rapport -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="110" y="40" width="582" height="25" forecolor="#1E3A8A" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="14" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{TITRE_RAPPORT} != null ? $P{TITRE_RAPPORT} : "Rapport de Statistique"]]></textFieldExpression>
+            </textField>
+
+            <!-- Nom de la pharmacie -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="110" y="65" width="582" height="20" forecolor="#475569" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="false" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$P{PHARMACIE_NOM} != null ? $P{PHARMACIE_NOM} : ""]]></textFieldExpression>
+            </textField>
+
+            <!-- Date de génération (en bas à droite) -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="600" y="65" width="202" height="20" forecolor="#64748B" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="10" isBold="false" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Date: " + ($P{DATE_GENERATION} != null ? $P{DATE_GENERATION} : "")]]></textFieldExpression>
+            </textField>
+
+            <!-- Nom de l'utilisateur qui imprime (en bas à gauche) -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="0" y="90" width="300" height="20" forecolor="#64748B" backcolor="#FFFFFF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="0.0" lineColor="#FFFFFF"/>
+                </box>
+                <textElement verticalAlignment="Middle">
+                    <font size="10" isBold="false" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Imprimé par: " + ($P{UTILISATEUR_NOM} != null ? $P{UTILISATEUR_NOM} : "")]]></textFieldExpression>
+            </textField>
+
+            <!-- Total -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="0" y="110" width="822" height="20" forecolor="#1E40AF" backcolor="#EFF6FF" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box>
+                    <pen lineWidth="1.0" lineColor="#3B82F6"/>
+                    <topPen lineWidth="1.0" lineColor="#3B82F6"/>
+                    <leftPen lineWidth="1.0" lineColor="#3B82F6"/>
+                    <bottomPen lineWidth="1.0" lineColor="#3B82F6"/>
+                    <rightPen lineWidth="1.0" lineColor="#3B82F6"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="11" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <textFieldExpression><![CDATA["Total: " + ($P{TOTAL_PRODUITS} != null ? $P{TOTAL_PRODUITS}.toString() : "0") + " produit(s)"]]></textFieldExpression>
+            </textField>
+        </band>
+    </title>
+
+    <!-- En-têtes de colonnes -->
+    <columnHeader>
+        <band height="40" splitType="Stretch">
+            <!-- Fond pour l'en-tête avec dégradé -->
+            <rectangle>
+                <reportElement x="0" y="0" width="822" height="40" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.0" lineColor="#1E3A8A"/>
+                </graphicElement>
+            </rectangle>
+
+            <!-- Colonne N° -->
+            <staticText>
+                <reportElement x="0" y="0" width="40" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[N°]]></text>
+            </staticText>
+
+            <!-- Colonne ID -->
+            <staticText>
+                <reportElement x="40" y="0" width="70" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[ID]]></text>
+            </staticText>
+
+            <!-- Colonne Nom Commercial -->
+            <staticText>
+                <reportElement x="110" y="0" width="140" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Nom Commercial]]></text>
+            </staticText>
+
+            <!-- Colonne Nom Scientifique -->
+            <staticText>
+                <reportElement x="250" y="0" width="130" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Nom Scientifique]]></text>
+            </staticText>
+
+            <!-- Colonne Stock -->
+            <staticText>
+                <reportElement x="380" y="0" width="70" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Stock]]></text>
+            </staticText>
+
+            <!-- Colonne Prix Achat -->
+            <staticText>
+                <reportElement x="450" y="0" width="80" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Prix Achat]]></text>
+            </staticText>
+
+            <!-- Colonne Qté Alerte -->
+            <staticText>
+                <reportElement x="530" y="0" width="70" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Qté Alerte]]></text>
+            </staticText>
+
+            <!-- Colonne Date Approv (toujours visible pour Achat Risqué) -->
+            <staticText>
+                <reportElement x="600" y="0" width="90" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Date Approv]]></text>
+            </staticText>
+
+            <!-- Colonne Péremption -->
+            <staticText>
+                <reportElement x="690" y="0" width="100" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Péremption]]></text>
+            </staticText>
+
+            <!-- Colonne Périssable -->
+            <staticText>
+                <reportElement x="790" y="0" width="32" height="40" forecolor="#FFFFFF" backcolor="#4B5563" mode="Opaque">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="5" bottomPadding="5">
+                    <pen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <topPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <leftPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <bottomPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                    <rightPen lineWidth="0.5" lineColor="#FFFFFF"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="10" isBold="true" pdfFontName="Helvetica-Bold"/>
+                </textElement>
+                <text><![CDATA[Périssable]]></text>
+            </staticText>
+        </band>
+    </columnHeader>
+
+    <!-- Détails avec couleurs alternées -->
+    <detail>
+        <band height="25" splitType="Stretch">
+            <!-- Fond alterné selon le numéro de ligne - Lignes impaires (blanc) -->
+            <rectangle>
+                <reportElement x="0" y="0" width="822" height="25" mode="Opaque" backcolor="#FFFFFF" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[$V{REPORT_COUNT}.intValue() % 2 == 1]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.0" lineColor="#F1F5F9"/>
+                </graphicElement>
+            </rectangle>
+            <!-- Fond alterné selon le numéro de ligne - Lignes paires (gris clair) -->
+            <rectangle>
+                <reportElement x="0" y="0" width="822" height="25" mode="Opaque" backcolor="#F9FAFB" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[$V{REPORT_COUNT}.intValue() % 2 == 0]]></printWhenExpression>
+                </reportElement>
+                <graphicElement>
+                    <pen lineWidth="0.0" lineColor="#F1F5F9"/>
+                </graphicElement>
+            </rectangle>
+
+            <!-- Colonne N° -->
+            <textField>
+                <reportElement x="0" y="0" width="40" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$V{REPORT_COUNT}]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne ID -->
+            <textField>
+                <reportElement x="40" y="0" width="70" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{id} != null ? $F{id}.toString() : ""]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Nom Commercial -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="110" y="0" width="140" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{nomcommercial} != null ? $F{nomcommercial} : ""]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Nom Scientifique -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="250" y="0" width="130" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{nomscientifique} != null ? $F{nomscientifique} : "-"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Stock -->
+            <textField>
+                <reportElement x="380" y="0" width="70" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{stockencours} != null ? $F{stockencours}.toString() : "0"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Prix Achat -->
+            <textField>
+                <reportElement x="450" y="0" width="80" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Right" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{prixachat} != null ? "$" + $F{prixachat}.toString() : "$0.00"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Qté Alerte -->
+            <textField>
+                <reportElement x="530" y="0" width="70" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{qtealert} != null ? $F{qtealert}.toString() : "0"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Date Approv (toujours visible pour Achat Risqué) -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="600" y="0" width="90" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{dateApprov} != null ? $F{dateApprov}.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) : "-"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Péremption -->
+            <textField textAdjust="StretchHeight" isBlankWhenNull="true">
+                <reportElement x="690" y="0" width="100" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{peremption} != null ? $F{peremption} : "-"]]></textFieldExpression>
+            </textField>
+
+            <!-- Colonne Périssable -->
+            <textField>
+                <reportElement x="790" y="0" width="32" height="25" mode="Opaque" stretchType="RelativeToTallestObject">
+                    <printWhenExpression><![CDATA[true]]></printWhenExpression>
+                </reportElement>
+                <box leftPadding="5" rightPadding="5" topPadding="3" bottomPadding="3">
+                    <pen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <topPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <leftPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <bottomPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                    <rightPen lineWidth="0.5" lineColor="#E2E8F0"/>
+                </box>
+                <textElement textAlignment="Center" verticalAlignment="Middle">
+                    <font size="8" pdfFontName="Helvetica"/>
+                </textElement>
+                <textFieldExpression><![CDATA[$F{perimable} != null && $F{perimable} ? "Oui" : "Non"]]></textFieldExpression>
+            </textField>
+        </band>
+    </detail>
+</jasperReport>
+

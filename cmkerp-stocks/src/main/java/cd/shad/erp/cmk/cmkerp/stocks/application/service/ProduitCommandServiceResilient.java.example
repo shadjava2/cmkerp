@@ -1,0 +1,148 @@
+package cd.shad.erp.cmk.cmkerp.stocks.application.service;
+
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retry;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import cd.shad.erp.cmk.cmkerp.stocks.domain.repository.ProduitRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * EXEMPLE : Service avec annotations Resilience4j (@Retry, @CircuitBreaker).
+ *
+ * <p>
+ * Ce fichier sert d'exemple pour montrer comment utiliser les annotations de résilience.
+ * Copier les annotations dans les services réels selon les besoins.
+ *
+ * <p>
+ * Note : Pour utiliser ces annotations, Resilience4j doit être configuré dans application.yml
+ * (déjà fait dans le projet).
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional
+@Slf4j
+public class ProduitCommandServiceResilient {
+
+    private final ProduitRepository produitRepository;
+
+    /**
+     * Exemple 1 : Retry simple pour les opérations critiques.
+     *
+     * <p>
+     * Configuration :
+     * - maxAttempts : Nombre maximum de tentatives (1 tentative initiale + retries)
+     * - value : Exception(s) qui déclenchent un retry
+     * - backoff : Stratégie de backoff (exponentiel par défaut)
+     */
+    @Retry(
+        maxAttempts = 3,
+        value = {org.springframework.dao.DataAccessException.class},
+        backoff = @Backoff(delay = 100, multiplier = 2.0, maxDelay = 1000)
+    )
+    public void createProduit() {
+        log.info("Tentative de création de produit");
+        // Implémentation...
+        // Si DataAccessException est levée, retry automatique (max 3 tentatives)
+    }
+
+    /**
+     * Exemple 2 : Retry avec deadlock spécifique.
+     *
+     * <p>
+     * Pour les deadlocks MySQL, utiliser le deadlockRetryTemplate configuré
+     * dans DeadlockRetryConfig plutôt que @Retry.
+     */
+    @Retry(
+        maxAttempts = 3,
+        value = {org.springframework.dao.DeadlockLoserDataAccessException.class},
+        backoff = @Backoff(delay = 100, multiplier = 2.0)
+    )
+    public void updateProduit() {
+        log.info("Mise à jour de produit avec retry sur deadlock");
+        // Implémentation...
+        // Si DeadlockLoserDataAccessException, retry automatique
+    }
+
+    /**
+     * Exemple 3 : Circuit Breaker pour les appels d'API externe.
+     *
+     * <p>
+     * Le circuit breaker s'ouvre si le taux d'échec dépasse le seuil configuré,
+     * empêchant les appels suivants jusqu'à ce qu'il se referme.
+     *
+     * <p>
+     * Configuration dans application.yml :
+     * resilience4j.circuitbreaker.configs.default.failureRateThreshold=50
+     * resilience4j.circuitbreaker.configs.default.waitDurationInOpenState=10s
+     */
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(
+        name = "default",
+        fallbackMethod = "fallbackExternalApi"
+    )
+    public String callExternalApi() {
+        log.info("Appel API externe avec circuit breaker");
+        // Appel API externe qui peut échouer
+        // Si taux d'échec > 50%, circuit breaker s'ouvre
+        return "success";
+    }
+
+    /**
+     * Méthode de fallback appelée si le circuit breaker est ouvert ou si l'appel échoue.
+     *
+     * <p>
+     * La signature doit correspondre à la méthode annotée, avec une exception en paramètre supplémentaire.
+     */
+    public String fallbackExternalApi(Exception ex) {
+        log.warn("Circuit breaker ouvert ou erreur API externe, utilisation du fallback", ex);
+        return "fallback-value";
+    }
+
+    /**
+     * Exemple 4 : Combinaison Retry + Circuit Breaker.
+     *
+     * <p>
+     * Le retry s'exécute d'abord, puis le circuit breaker s'active si le taux d'échec est trop élevé.
+     */
+    @Retry(maxAttempts = 3, backoff = @Backoff(delay = 200))
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(
+        name = "default",
+        fallbackMethod = "fallbackCombined"
+    )
+    public String combinedResilience() {
+        log.info("Opération avec retry + circuit breaker");
+        // Implémentation...
+        return "success";
+    }
+
+    public String fallbackCombined(Exception ex) {
+        log.warn("Fallback pour opération combinée", ex);
+        return "fallback";
+    }
+
+    /**
+     * Exemple 5 : Utilisation du deadlockRetryTemplate (recommandé pour deadlocks MySQL).
+     *
+     * <p>
+     * Pour les deadlocks MySQL spécifiquement, utiliser le RetryTemplate configuré
+     * dans DeadlockRetryConfig plutôt que @Retry.
+     *
+     * <pre>{@code
+     * @Autowired
+     * private RetryTemplate deadlockRetryTemplate;
+     *
+     * public void updateWithDeadlockRetry() {
+     *   deadlockRetryTemplate.execute(context -> {
+     *     produitRepository.save(produit);
+     *     return null;
+     *   });
+     * }
+     * }</pre>
+     */
+    public void updateWithDeadlockRetry() {
+        // Voir DeadlockRetryConfig pour l'implémentation avec RetryTemplate
+        log.info("Mise à jour avec deadlockRetryTemplate");
+    }
+}

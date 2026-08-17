@@ -1,0 +1,8 @@
+[
+  ["org.springframework.security.oauth2.jwt.Jwt"],
+  ["org.springframework.security.core.Authentication"],
+  ["org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken"],
+  ["java.util.Map"],
+  ["java.util.List"]
+]
+

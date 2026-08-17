@@ -1,0 +1,54 @@
+# Gateway CMK + Redis. Rejoint le réseau Docker de la console (cmk-console-net).
+# Ports 127.0.0.1 uniquement — n'écrase pas les autres apps.
+#
+# Profil : prod (logging, pool, sécu). La DB vient du .env
+# (mêmes identifiants que application-dev.yml : 192.168.100.254:32768).
+#
+# Cloudflare : api.cmkerp.com → http://cmk-gateway:8999
+
+name: cmk-gateway
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: cmk-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - cmk-redis-data:/data
+    networks:
+      - cmk-net
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cmk-gateway:local
+    container_name: cmk-gateway
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "127.0.0.1:${GATEWAY_HOST_PORT:-8999}:8999"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      CMK_SERVER_PORT: "8999"
+      CMK_REDIS_HOST: redis
+      CMK_REDIS_PORT: "6379"
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75.0}
+    networks:
+      - cmk-net
+
+networks:
+  cmk-net:
+    name: cmk-console-net
+    external: true
+
+volumes:
+  cmk-redis-data:
+    name: cmk-redis-data

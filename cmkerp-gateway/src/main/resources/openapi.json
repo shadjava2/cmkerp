@@ -1,0 +1,41 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "CMK ERP API",
+    "version": "4.1.1",
+    "description": "API documentation will be generated from the running application. Please download the OpenAPI spec from http://localhost:8984/cmkerp-gateway/v3/api-docs and replace this file.",
+    "contact": {
+      "name": "CMK ERP Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8984/cmkerp-gateway",
+      "description": "Development server"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Health check",
+        "description": "Placeholder endpoint",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
+

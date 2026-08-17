@@ -1,0 +1,120 @@
+# ==========================================
+# CONFIGURATION TEST - Base de données MySQL via Testcontainers
+# ==========================================
+
+spring:
+  main:
+    web-application-type: servlet
+
+  # ==========================================
+  # HIBERNATE / JPA - Configuration TEST
+  # ==========================================
+  jpa:
+    hibernate:
+      ddl-auto: none  # Le schéma est créé via schema-test.sql
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: false
+        show_sql: false
+        cache:
+          use_second_level_cache: false  # Désactiver le cache en test
+          use_query_cache: false
+    open-in-view: false
+
+  # ==========================================
+  # FLYWAY - Désactivé pour les tests (schéma via schema-test.sql)
+  # ==========================================
+  flyway:
+    enabled: false
+
+  # ==========================================
+  # SQL INITIALIZATION - Désactivé pour les tests (évite la validation de connexion au démarrage)
+  # ==========================================
+  sql:
+    init:
+      mode: never
+      # schema-locations: classpath:schema-test.sql
+      continue-on-error: true
+
+  # ==========================================
+  # CACHE - Désactivé en test
+  # ==========================================
+  cache:
+    type: none
+
+  # ==========================================
+  # REDIS - Désactivé en test (mock si nécessaire)
+  # ==========================================
+  # Note: timeout doit être un nombre (millisecondes), pas une chaîne avec "ms"
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      timeout: 2000  # Millisecondes (2000 = 2 secondes)
+
+  # ==========================================
+  # KAFKA - Désactivé en test
+  # ==========================================
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: cmkerp-test-group
+      auto-offset-reset: earliest
+
+# ==========================================
+# DATASOURCES TEST - Variables d'environnement avec valeurs par défaut TEST
+# ==========================================
+cmk:
+  datasource:
+    primary:
+      url: ${CMK_TEST_DB_URL:jdbc:mysql://127.0.0.1:32768/cmkerp-v24dev?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+      driver-class-name: ${CMK_TEST_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+      username: ${CMK_TEST_DB_USER:shad}
+      password: ${CMK_TEST_DB_PASSWORD:SDconceptsrdc@243}
+      pool-name: CMK-ERP-TestPool
+      auto-commit: false
+
+# ==========================================
+# POOL HIKARI TEST - Configuration réduite pour tests
+# ==========================================
+cmkerp:
+  db:
+    pool:
+      # Pool réduit pour tests
+      max-size: 5
+      min-idle: 1
+      connection-timeout-ms: 20000
+      idle-timeout-ms: 300000  # 5 minutes
+      max-lifetime-ms: 1800000  # 30 minutes
+      keepalive-time-ms: 120000  # 2 minutes
+
+  kafka:
+    enabled: false  # Désactiver Kafka en test
+  async:
+    core-pool-size: 2
+    max-pool-size: 4
+    queue-capacity: 10
+  email:
+    max-retries: 1  # Réduire les retries en test
+    retry-backoff-ms: 100
+  security:
+    jwt:
+      secret: test-secret-key-for-jwt-token-generation-in-tests-only
+      expiration-ms: 3600000
+      refresh-expiration-ms: 86400000
+
+# ==========================================
+# LOGGING TEST - Minimal
+# ==========================================
+logging:
+  level:
+    root: WARN
+    cd.shad.erp.cmk.cmkerp: DEBUG
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.flywaydb: INFO
+

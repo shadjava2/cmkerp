@@ -1,0 +1,123 @@
+# ==========================================
+# CONFIGURATION TEST - Module Platform
+# ==========================================
+# Configuration pour les tests d'intégration du module platform
+# Utilise une base de données MySQL locale
+
+cmk:
+  datasource:
+    primary:
+      # MySQL local pour les tests (configurer via variables d'environnement si nécessaire)
+      url: ${CMK_TEST_DB_URL:jdbc:mysql://localhost:3306/cmkerp_test?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+      username: ${CMK_TEST_DB_USER:root}
+      password: ${CMK_TEST_DB_PASSWORD:}
+      driver-class-name: ${CMK_TEST_DB_DRIVER:com.mysql.cj.jdbc.Driver}
+      pool-name: CMK-ERP-TestPool
+      auto-commit: false
+
+cmkerp:
+  db:
+    pool:
+      max-size: 5
+      min-idle: 1
+      connection-timeout-ms: 10000
+      idle-timeout-ms: 300000
+      max-lifetime-ms: 600000
+      keepalive-time-ms: 60000
+  redis:
+    pool:
+      max-active: 4
+      max-idle: 2
+      min-idle: 1
+      time-between-eviction-runs-ms: 30000
+  kafka:
+    enabled: false
+  elasticsearch:
+    enabled: false
+  query-optimization:
+    enabled: false
+
+spring:
+  # Configuration JPA pour les tests
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        generate_statistics: false
+    open-in-view: false
+
+  # Désactiver Redis pour les tests (sauf si explicitement nécessaire)
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1000
+      lettuce:
+        pool:
+          max-active: 2
+          max-idle: 1
+          min-idle: 0
+
+  # Désactiver Kafka pour les tests (sauf si explicitement activé dans le test)
+  kafka:
+    bootstrap-servers: ${CMK_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: test-group
+      auto-offset-reset: earliest
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Configuration Flyway pour les tests
+  flyway:
+    enabled: false
+
+  # ==========================================
+  # SQL INITIALIZATION - Script SQL pour les tests JDBC
+  # ==========================================
+  sql:
+    init:
+      mode: never
+      # schema-locations: classpath:schema-test.sql
+      continue-on-error: true
+
+  # Configuration mail pour les tests (mock)
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+
+  # Configuration sécurité pour les tests
+  security:
+    user:
+      name: test
+      password: test
+
+  # Désactiver les fonctionnalités non essentielles pour les tests
+  main:
+    lazy-initialization: false
+    allow-bean-definition-overriding: true
+
+# Configuration logging pour les tests
+logging:
+  level:
+    root: WARN
+    cd.shad.erp.cmk.cmkerp: DEBUG
+    org.springframework: WARN
+    org.hibernate: WARN
+    com.zaxxer.hikari: WARN
+
+# Configuration Actuator pour les tests
+management:
+  endpoints:
+    enabled-by-default: false
+  endpoint:
+    health:
+      enabled: true
+      show-details: never
+

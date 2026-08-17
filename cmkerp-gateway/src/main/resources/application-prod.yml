@@ -1,0 +1,269 @@
+# ==========================================
+# CONFIGURATION PRODUCTION - HAUTE PERFORMANCE
+# Optimisé pour millions d'utilisateurs simultanés
+# ==========================================
+
+# ==========================================
+# DATASOURCES - Variables d'environnement OBLIGATOIRES en PROD
+# ==========================================
+cmk:
+  datasource:
+    primary:
+      # URL JDBC optimisée MySQL 8 avec paramètres haute performance
+      # IMPORTANT: Inclure ces paramètres dans CMK_PRIMARY_DB_URL pour optimisations :
+      # cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true
+      url: ${CMK_PRIMARY_DB_URL}
+      username: ${CMK_PRIMARY_DB_USER}
+      password: ${CMK_PRIMARY_DB_PASSWORD}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      pool-name: CMK-ERP-PrimaryPool
+      auto-commit: false
+      register-mbeans: true
+      leak-detection-threshold: 60000
+
+# ==========================================
+# POOL HIKARI PROD - Configuration optimisée pour haute charge
+# ==========================================
+cmkerp:
+  db:
+    # ==========================================
+    # SLOW QUERY LOG - Configuration MySQL
+    # ==========================================
+    slow-query-log:
+      enabled: true # Activer le slow query log
+      long-query-time-seconds: 2 # Seuil en secondes (requêtes > 2s seront loggées)
+      retention-days: 7 # Rétention des logs (7 jours)
+      log-queries-not-using-indexes: true # Logger les requêtes sans index
+    slow-query-logger:
+      enabled: true # Activer le logger applicatif pour les requêtes lentes
+      threshold-ms: 1000 # Seuil en millisecondes (requêtes > 1s seront loggées)
+    pool:
+      # Ajuster selon le nombre d'instances et max_connections MySQL
+      # Formule : max-size = (max_connections MySQL / nombre_instances) - marge_sécurité
+      # Exemple : MySQL max_connections=200, 3 instances → max-size = (200/3) - 10 = ~60
+      # Exemple : MySQL max_connections=500, 5 instances → max-size = (500/5) - 20 = ~80
+      max-size: 60
+      # min-idle : environ 30-40% de max-size pour maintenir des connexions chaudes
+      min-idle: 20
+      connection-timeout-ms: 30000
+      validation-timeout-ms: 3000 # 3 secondes (optimisé pour validation rapide)
+      idle-timeout-ms: 600000 # 10 minutes
+      # Vérification automatique wait_timeout au démarrage par MySQLWaitTimeoutChecker
+      # max-lifetime doit être < wait_timeout MySQL (généralement 28800s = 8h = 28800000ms)
+      # Recommandation : max-lifetime = wait_timeout - 30 minutes (marge de sécurité)
+      # Exemple : wait_timeout=8h (28800000ms) → max-lifetime=7h30 (27000000ms)
+      max-lifetime-ms: 27000000 # 7h30 (ajuster selon wait_timeout MySQL)
+      keepalive-time-ms: 120000 # 2 minutes
+  async:
+    # Configuration du pool de threads async (pour @Async)
+    # Ajuster selon la charge et le nombre d'instances
+    # Formule : core-pool-size = nombre_instances × 2, max-pool-size = core × 4
+    core-pool-size: 8
+    max-pool-size: 32
+    queue-capacity: 500
+  email:
+    # Configuration retry pour emails
+    max-retries: 5 # Plus de retries en prod
+    retry-backoff-ms: 2000 # Backoff exponentiel : 2s, 4s, 8s, 16s, 32s
+  stock-intelligence:
+    enabled: ${CMK_STOCK_INTELLIGENCE_ENABLED:true}
+    morning-report-enabled: ${CMK_STOCK_INTELLIGENCE_MORNING:true}
+    evening-report-enabled: ${CMK_STOCK_INTELLIGENCE_EVENING:true}
+    run-on-startup: false
+    openai:
+      enabled: ${OPENAI_ENABLED:false}
+      api-key: ${OPENAI_API_KEY:}
+    whatsapp:
+      enabled: ${WHATSAPP_ENABLED:false}
+      token: ${WHATSAPP_TOKEN:}
+      phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+      verify-token: ${WHATSAPP_VERIFY_TOKEN:cmk-stock-verify}
+    email:
+      subject-prefix: "[CMK Stock]"
+      default-recipient: ${CMK_STOCK_INTELLIGENCE_EMAIL:}
+  # ==========================================
+  # POOL REDIS PROD - Configuration optimisée pour haute charge
+  # ==========================================
+  redis:
+    pool:
+      # Configuration du pool Redis
+      # Formule : (max-active × nombre-instances) + 20% ≤ maxclients Redis
+      # Exemple : 3 instances × 64 max-active = 192 connexions + 20% = 230 connexions nécessaires
+      # Vérification automatique au démarrage par RedisMaxClientsChecker
+      max-active: 64
+      # max-idle : environ 50% de max-active pour maintenir des connexions chaudes
+      max-idle: 32
+      # min-idle : environ 10-15% de max-active pour éviter les créations fréquentes
+      min-idle: 8
+      time-between-eviction-runs-ms: 30000 # 30 secondes
+      # Nombre d'instances de l'application (activé la vérification maxclients si configuré)
+      # Si non configuré, la vérification est désactivée
+      # Exemple : 3 instances en production
+      number-of-instances: ${CMK_REDIS_NUMBER_OF_INSTANCES:}
+  # ==========================================
+  # RATE LIMITING PROD - Protection DDoS stricte
+  # ==========================================
+  rate-limit:
+    enabled: true
+    # Limites strictes en production : 100 requêtes par minute par IP/utilisateur
+    requests-per-window: 100
+    window-size-seconds: 60
+    strategy: IP
+    protected-paths:
+      - /api/auth/**
+      - /api/public/**
+    # Gestion d'erreur Redis : fallback en production
+    # En production, on peut choisir de bloquer (false) ou autoriser (true) si Redis est down
+    # Recommandation : true pour éviter la panne totale, mais avec monitoring strict
+    fallback-on-redis-error: true
+    # Seuil d'erreurs Redis consécutives avant activation du circuit breaker
+    redis-error-threshold: 5
+  # ==========================================
+  # KAFKA PROD - Désactivé par défaut
+  # ==========================================
+  kafka:
+    enabled: false
+  # ==========================================
+  # VENTES PROD - Configuration validation
+  # ==========================================
+  ventes:
+    use-stored-procedures: true # Utiliser les stored procedures pour la validation (plus performant et sécurisé)
+
+# ==========================================
+# HIKARI PROD - Monitoring et Performance
+# ==========================================
+spring:
+  datasource:
+    primary:
+      hikari:
+        register-mbeans: true
+        leak-detection-threshold: 60000
+
+  # ==========================================
+  # FLYWAY - Migrations DB PROD
+  # ==========================================
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: 'Baseline du schéma CMK-ERP existant'
+    validate-on-migrate: true
+    clean-disabled: true
+    # Utilise automatiquement la datasource primaire (@Primary)
+
+  # ==========================================
+  # JPA & Logs PROD - Optimisations
+  # ==========================================
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          # Configuration Redis pour cache Hibernate (via Redisson)
+          # Redisson utilise le RedissonClient configuré dans RedissonHibernateConfig
+          region:
+            factory_class: org.redisson.hibernate.RedissonRegionFactory
+          # Les caches Hibernate seront stockés dans Redis (cache distribué partagé entre instances)
+          # Configuration Redisson dans RedissonHibernateConfig.java utilise spring.data.redis.*
+        jdbc:
+          batch_size: 100 # Augmenté pour PROD (50 en DEV) - meilleure performance pour inserts massifs
+          fetch_size: 250
+        default_batch_fetch_size: 100
+
+  main:
+    lazy-initialization: false
+  # ==========================================
+  # SMTP PROD
+  # ==========================================
+  mail:
+    host: ${MAIL_HOST:mail.cosoft.host}
+    port: 465
+    username: ${MAIL_USERNAME:cosofterp@cosoft.host}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: false
+          connectiontimeout: 50000
+          timeout: 50000
+          writetimeout: 50000
+          socketFactory:
+            port: 465
+            class: javax.net.ssl.SSLSocketFactory
+  # ==========================================
+  # SERVER ERROR HANDLING PROD - Sécurité
+  # ==========================================
+  web:
+    error:
+      include-message: never
+      include-binding-errors: never
+      include-stacktrace: never
+
+# ==========================================
+# LOGGING PROD - Minimal pour performance
+# ==========================================
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.web: INFO
+    org.hibernate: WARN
+    com.zaxxer.hikari: INFO
+    root: INFO
+    slow.query: WARN # Logger pour les requêtes lentes
+    http.request: INFO # Logger pour les requêtes HTTP structurées
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+
+# ==========================================
+# ACTUATOR PROD - Détails conditionnels
+# ==========================================
+management:
+  endpoint:
+    health:
+      show-details: when_authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  tracing:
+    enabled: true
+    sampling:
+      # Sampling réduit en production : 0.1% pour optimiser les coûts et le trafic
+      # Avec 45M d'utilisateurs, 100% de sampling générerait un trafic OTEL considérable
+      # 0.001 = 0.1% des requêtes seront tracées (suffisant pour observabilité)
+      probability: 0.001
+    export:
+      otlp:
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+  otlp:
+    tracing:
+      enabled: true
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+
+# ==========================================
+# TOMCAT PROD - Haute Performance
+# ==========================================
+server:
+  tomcat:
+    threads:
+      max: 1000
+      min-spare: 200
+    max-connections: 20000
+    accept-count: 1000
+
+# ==========================================
+# JWT Configuration (pour JwtTokenProviderImpl)
+# ==========================================
+jwt:
+  secret: ${CMK_JWT_SECRET}
+  access-token-expiration: 86400000 # 24 heures en PROD (session longue durée)
+  refresh-token-expiration: 604800000 # 7 jours

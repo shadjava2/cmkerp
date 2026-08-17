@@ -1,0 +1,140 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- PAS DE PARENT ICI, SINON CYCLE -->
+  <groupId>cd.shad.erp.cmk.cmkerp</groupId>
+  <artifactId>cmkerp-bom</artifactId>
+  <version>4.1.1</version>
+  <packaging>pom</packaging>
+
+  <properties>
+    <jjwt.version>0.12.6</jjwt.version>
+    <hibernate.extra.version>6.6.2.Final</hibernate.extra.version>
+    <mapstruct.version>1.6.3</mapstruct.version>
+    <lombok.version>1.18.34</lombok.version>
+    <springdoc.version>2.8.0</springdoc.version>
+    <resilience4j.version>2.2.0</resilience4j.version>
+    <bucket4j.version>8.10.1</bucket4j.version>
+    <redisson.version>3.30.0</redisson.version>
+    <jakarta.servlet.version>6.0.0</jakarta.servlet.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- Servlet API (AuthTokenExtractor, contrôleurs REST) -->
+      <dependency>
+        <groupId>jakarta.servlet</groupId>
+        <artifactId>jakarta.servlet-api</artifactId>
+        <version>${jakarta.servlet.version}</version>
+      </dependency>
+
+      <!-- JWT -->
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-api</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-impl</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.jsonwebtoken</groupId>
+        <artifactId>jjwt-jackson</artifactId>
+        <version>${jjwt.version}</version>
+      </dependency>
+
+
+      <!-- Hibernate avancé -->
+      <dependency>
+        <groupId>org.hibernate.orm</groupId>
+        <artifactId>hibernate-core</artifactId>
+        <version>${hibernate.extra.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.hibernate.orm</groupId>
+        <artifactId>hibernate-jcache</artifactId>
+        <version>${hibernate.extra.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>p6spy</groupId>
+        <artifactId>p6spy</artifactId>
+        <version>3.9.2</version>
+      </dependency>
+
+      <!-- MapStruct -->
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.mapstruct</groupId>
+        <artifactId>mapstruct-processor</artifactId>
+        <version>${mapstruct.version}</version>
+      </dependency>
+
+      <!-- Lombok -->
+      <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok</artifactId>
+        <version>${lombok.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.projectlombok</groupId>
+        <artifactId>lombok-mapstruct-binding</artifactId>
+        <version>0.2.0</version>
+      </dependency>
+
+      <!-- SpringDoc OpenAPI (Swagger) -->
+      <dependency>
+        <groupId>org.springdoc</groupId>
+        <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+        <version>${springdoc.version}</version>
+      </dependency>
+
+      <!-- Resilience4j -->
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-spring-boot3</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-retry</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-circuitbreaker</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+
+      <!-- Bucket4j pour rate limiting -->
+      <!-- NOTE: Version 8.10.1 utilisée (8.11.0 nécessite bucket4j_jdk17-* qui n'est pas encore stable) -->
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j-core</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j-redis</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
+
+      <!-- Redisson pour cache Hibernate avec Redis -->
+      <dependency>
+        <groupId>org.redisson</groupId>
+        <artifactId>redisson-hibernate-6</artifactId>
+        <version>${redisson.version}</version>
+      </dependency>
+
+
+    </dependencies>
+  </dependencyManagement>
+</project>

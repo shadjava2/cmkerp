@@ -1,0 +1,426 @@
+spring:
+  application:
+    name: cmkerp-gateway
+
+  main:
+    web-application-type: servlet
+
+  # Profil actif : "dev" par défaut pour développement local
+  # En production, définir SPRING_PROFILES_ACTIVE=prod via variable d'environnement
+  # Ne PAS utiliser "dev" en production
+  profiles:
+    active: dev
+
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+  # ==========================================
+  # HIBERNATE / JPA - CONFIGURATION COMMUNE
+  # ==========================================
+  jpa:
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+          fetch_size: 250
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+        default_batch_fetch_size: 100
+        cache:
+          # Cache désactivé par défaut (activé uniquement en production via application-prod.yml)
+          use_second_level_cache: false
+          use_query_cache: false
+          # Configuration Redis pour cache Hibernate (via Redisson) - activée uniquement en PROD
+          # Redisson utilise le RedissonClient configuré dans RedissonHibernateConfig
+          # region:
+          #   factory_class: org.redisson.hibernate.RedissonRegionFactory
+          # Les caches Hibernate seront stockés dans Redis (cache distribué partagé entre instances)
+          # Configuration Redisson dans RedissonHibernateConfig.java utilise spring.data.redis.*
+        generate_statistics: false
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        jdbc.use_get_generated_keys: true
+        jdbc.lob.non_contextual_creation: true
+    open-in-view: false
+
+  # Cache Redis distribué (scalabilité horizontale)
+  cache:
+    type: redis
+  data:
+    redis:
+      host: ${CMK_REDIS_HOST:localhost}
+      port: ${CMK_REDIS_PORT:6379}
+      password: ${CMK_REDIS_PASSWORD:}
+      timeout: 2000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  # Ressources statiques et error handling
+  web:
+    resources:
+      static-locations: classpath:/static/
+      cache:
+        period: 3600
+        cachecontrol:
+          max-age: 3600
+    error:
+      include-stacktrace: never
+
+  # Transactions
+  transaction:
+    default-timeout: 30
+
+  # ==========================================
+  # KAFKA - Messaging Asynchrone
+  # ==========================================
+  kafka:
+    bootstrap-servers: ${CMK_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${CMK_KAFKA_GROUP_ID:cmkerp-api-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: '*'
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  # ==========================================
+  # OAUTH2/OIDC RESOURCE SERVER - Configuration Keycloak-ready
+  # ==========================================
+  # Structure prête pour intégration avec un IdP OIDC (Keycloak, Auth0, etc.)
+  # Pour activer OAuth2/OIDC, configurer les variables d'environnement suivantes :
+  # - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+  # - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI (optionnel si issuer-uri est fourni)
+  #
+  # Exemple pour Keycloak :
+  #   issuer-uri: https://keycloak.example.com/realms/cmkerp
+  #   (jwk-set-uri sera automatiquement découvert via /.well-known/openid-configuration)
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # URI de l'issuer OIDC (découverte automatique de jwk-set-uri)
+          # Exemple Keycloak: https://keycloak.example.com/realms/cmkerp
+          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:}
+          # URI du JWK Set (optionnel si issuer-uri fourni, découverte automatique)
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+
+# ==========================================
+# KEYCLOAK - IAM Entreprise (optionnel)
+# ==========================================
+keycloak:
+  # Flag pour activer/désactiver Keycloak
+  enabled: ${KEYCLOAK_ENABLED:false}
+  realm: ${KEYCLOAK_REALM:cmkerp}
+  auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://localhost:8080}
+  resource: ${KEYCLOAK_RESOURCE:cmkerp-backend}
+  credentials:
+    secret: ${KEYCLOAK_CLIENT_SECRET:}
+  # SSL requis en production
+  ssl-required: ${KEYCLOAK_SSL_REQUIRED:external}
+  # Public client (pas de secret) ou confidential client (avec secret)
+  public-client: ${KEYCLOAK_PUBLIC_CLIENT:false}
+
+# ==========================================
+# ACTUATOR / HEALTH CHECKS - CONFIGURATION COMMUNE
+# ==========================================
+management:
+  health:
+    db:
+      enabled: true
+    redis:
+      enabled: true
+    # SMTP injoignable ne doit pas bloquer /actuator/health (50s+ timeout)
+    mail:
+      enabled: ${MANAGEMENT_HEALTH_MAIL_ENABLED:false}
+    diskspace:
+      enabled: false
+    defaults:
+      enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  tracing:
+    enabled: false
+    sampling:
+      # Sampling à 100% en développement (dev) pour debugging complet
+      # En production, cette valeur sera surchargée par application-prod.yml (0.001 = 0.1%)
+      probability: 1.0
+    export:
+      # Désactiver l'exporter OTLP par défaut pour éviter les erreurs "Failed to export spans"
+      # Pour activer: définir OTEL_EXPORTER_OTLP_ENDPOINT et lancer un collector OTLP
+      # Si OTEL_EXPORTER_OTLP_ENDPOINT n'est pas défini, l'exporter ne sera pas utilisé
+      otlp:
+        endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
+  # ==========================================
+  # OPENTELEMETRY - Traces distribuées
+  # ==========================================
+  # Désactiver OTLP tracing si aucun endpoint n'est configuré
+  otlp:
+    tracing:
+      enabled: false
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}
+
+# ==========================================
+# OPENTELEMETRY - Traces distribuées (fusionné avec management ci-dessus)
+# ==========================================
+# Note: La configuration OTLP et tracing est déjà définie dans la section management ci-dessus
+
+# ==========================================
+# RESILIENCE4J - Configuration par défaut
+# ==========================================
+resilience4j:
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 1000
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - org.springframework.dao.DataAccessException
+          - java.sql.SQLException
+          - java.net.SocketTimeoutException
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 2s
+
+# ==========================================
+# TOMCAT - CONFIGURATION COMMUNE
+# ==========================================
+server:
+  compression:
+    enabled: true
+    # Compression Gzip pour tous les types de contenu, y compris les PDF
+    mime-types: application/pdf,application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    min-response-size: 1024
+
+  tomcat:
+    accept-count: 500
+    max-connections: 20000
+    connection-timeout: 20s
+    max-swallow-size: 104857600
+    resource:
+      cache:
+        max-size: 52428800
+        ttl: 604800000
+    server-header: ''
+    processor-cache: 200
+    max-keep-alive-requests: 100
+
+  servlet:
+    context-path: /cmkerp-gateway
+    session:
+      cookie:
+        max-age: 7d
+        secure: true
+        http-only: true
+        same-site: strict
+      timeout: 8h # Facebook-Grade : Session HTTP de 8 heures minimum
+
+  address: 0.0.0.0
+  # Port par défaut 8999 (aligné mobile / prod). Surcharge : CMK_SERVER_PORT ou --server.port=
+  port: ${CMK_SERVER_PORT:8999}
+  ssl:
+    enabled: false
+
+  forward-headers-strategy: framework
+
+# ==========================================
+# APPLICATION INFO & CONFIGURATION CMKERP
+# ==========================================
+cmkerp:
+  version: 4.1.1
+  # ==========================================
+  # STOCK INTELLIGENCE — OpenAI, email, WhatsApp
+  # ==========================================
+  stock-intelligence:
+    enabled: ${CMK_STOCK_INTELLIGENCE_ENABLED:true}
+    # Vide = toutes les pharmacies centrales. Définir CMK_STOCK_INTELLIGENCE_PHARMACIE_ID pour filtrer une seule pharmacie.
+    morning-report-enabled: ${CMK_STOCK_INTELLIGENCE_MORNING:false}
+    morning-cron: "0 0 7 * * ?"
+    evening-report-enabled: ${CMK_STOCK_INTELLIGENCE_EVENING:false}
+    evening-cron: "0 0 18 * * ?"
+    run-on-startup: ${CMK_STOCK_INTELLIGENCE_RUN_ON_STARTUP:false}
+    openai:
+      enabled: ${OPENAI_ENABLED:false}
+      api-key: ${OPENAI_API_KEY:}
+      base-url: https://api.openai.com/v1
+      model: gpt-4o-mini
+      max-tokens: 4096
+      max-products-per-category: 40
+    whatsapp:
+      enabled: ${WHATSAPP_ENABLED:false}
+      token: ${WHATSAPP_TOKEN:}
+      phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
+      verify-token: ${WHATSAPP_VERIFY_TOKEN:cmk-stock-verify}
+      graph-api-version: v21.0
+      allowed-numbers: []
+    email:
+      subject-prefix: "[CMK Stock]"
+      default-recipient: ${CMK_STOCK_INTELLIGENCE_EMAIL:}
+  # ==========================================
+  # RATE LIMITING - Protection DDoS applicative
+  # ==========================================
+  rate-limit:
+    # Configuration par défaut (développement : limites très larges)
+    enabled: true
+    # Nombre de requêtes autorisées par fenêtre
+    requests-per-window: 1000
+    # Taille de la fenêtre en secondes
+    window-size-seconds: 60
+    # Stratégie : par IP ou par utilisateur (token JWT)
+    strategy: IP
+    # Endpoints protégés en priorité (endpoints publics sensibles)
+    protected-paths:
+      - /api/auth/**
+      - /api/public/**
+    # Gestion d'erreur Redis : fallback si Redis est indisponible
+    # Si true : autoriser les requêtes si Redis est down (dégradé mais service disponible)
+    # Si false : bloquer les requêtes si Redis est down (sécurisé mais service indisponible)
+    fallback-on-redis-error: true
+    # Seuil d'erreurs Redis consécutives avant activation du circuit breaker
+    # Après ce nombre d'erreurs, Redis est considéré comme indisponible
+    redis-error-threshold: 10
+  # ==========================================
+  # KAFKA - Messaging Asynchrone
+  # ==========================================
+  kafka:
+    # Flag global pour activer/désactiver Kafka
+    # Quand false : aucun bean Kafka ne sera initialisé, le projet peut démarrer sans broker Kafka
+    enabled: false
+  # ==========================================
+  # HAZELCAST - Cache distribué haute performance
+  # ==========================================
+  hazelcast:
+    # Flag global pour activer/désactiver Hazelcast
+    # Quand false : aucun bean Hazelcast ne sera initialisé
+    enabled: ${CMK_HAZELCAST_ENABLED:false}
+    cluster-name: ${CMK_HAZELCAST_CLUSTER_NAME:cmkerp-cluster}
+    port: ${CMK_HAZELCAST_PORT:5701}
+
+  # ==========================================
+  # ELASTICSEARCH - Indexation des événements d'audit
+  # ==========================================
+  elasticsearch:
+    # Flag global pour activer/désactiver Elasticsearch
+    # Quand false : aucun bean Elasticsearch ne sera initialisé, le projet peut démarrer sans cluster Elasticsearch
+    enabled: false
+    # Liste des URIs Elasticsearch (format: http://host:port ou https://host:port)
+    # Support de plusieurs nœuds pour haute disponibilité
+    uris:
+      - ${CMK_ELASTICSEARCH_URI:http://localhost:9200}
+    # Authentification (optionnel, requis si Elasticsearch est sécurisé)
+    username: ${CMK_ELASTICSEARCH_USERNAME:}
+    password: ${CMK_ELASTICSEARCH_PASSWORD:}
+    # Nom de l'index pour les événements d'audit
+    index-name: ${CMK_ELASTICSEARCH_INDEX_NAME:cmkerp-audit-events}
+    # Timeouts (en millisecondes)
+    connection-timeout-ms: ${CMK_ELASTICSEARCH_CONNECTION_TIMEOUT_MS:5000}
+    socket-timeout-ms: ${CMK_ELASTICSEARCH_SOCKET_TIMEOUT_MS:60000}
+    # Nombre maximum de tentatives de retry (géré par le service)
+    max-retries: ${CMK_ELASTICSEARCH_MAX_RETRIES:3}
+
+# ==========================================
+# STOCKAGE FICHIERS
+# ==========================================
+storage:
+  type: ${CMK_STORAGE_TYPE:local}
+  base-path: ${CMK_STORAGE_BASE_PATH:/tmp/cmkerp-storage}
+  endpoint: ${CMK_S3_ENDPOINT:http://localhost:9000}
+  access-key: ${CMK_S3_ACCESS_KEY:cmkerp}
+  secret-key: ${CMK_S3_SECRET_KEY:cmkerp}
+  bucket: ${CMK_S3_BUCKET:cmkerp-files}
+
+# ==========================================
+# JDBC TEMPLATE CONFIGURATION (Platform)
+# ==========================================
+platform:
+  jdbc:
+    primary:
+      fetch-size: 250
+      query-timeout: 30
+  # CORS — console (cmkerp.com) → API (api.cmkerp.com)
+  cors:
+    allowed-origins: ${CMK_CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3838,http://127.0.0.1:3838,http://localhost:3940,http://127.0.0.1:3940,https://cmkerp.com,https://www.cmkerp.com,http://cmkerp.com,http://www.cmkerp.com}
+    allow-credentials: true
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allowed-headers: Content-Type,Authorization,X-Requested-With,Accept,Origin,Cookie
+    max-age: 3600
+
+# ==========================================
+# JWT Configuration (par défaut - peut être surchargé par application-dev.yml ou application-prod.yml)
+# ==========================================
+jwt:
+  secret: ${CMK_JWT_SECRET:your-256-bit-secret-key-must-be-at-least-256-bits-long-for-HS256-algorithm}
+  access-token-expiration: 86400000 # 24 heures par défaut (session longue durée)
+  refresh-token-expiration: 604800000 # 7 jours par défaut
+
+# ==========================================
+# SWAGGER / OPENAPI DOCUMENTATION
+# ==========================================
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+    tryItOutEnabled: true
+    filter: true
+    display-request-duration: true
+    show-common-extensions: true
+    show-extensions: true
+    disable-swagger-default-url: false
+    use-root-path: false
+    doc-expansion: list
+    default-models-expand-depth: 2
+    default-model-expand-depth: 2
+    deep-linking: true
+    persist-authorization: true
+    urls:
+      - url: /v3/api-docs
+        name: CMK ERP API - Documentation complète
+      - url: /v3/api-docs/cmk-erp-api
+        name: CMK ERP API - Endpoints /api/**
+  group-configs:
+    - group: default
+      display-name: CMK ERP API - Documentation complète
+      paths-to-match: /**
+    - group: cmk-erp-api
+      display-name: CMK ERP API
+      paths-to-match: /api/**
