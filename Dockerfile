@@ -19,11 +19,8 @@ COPY cmkerp-stocks cmkerp-stocks
 COPY cmkerp-pos cmkerp-pos
 COPY cmkerp-gateway cmkerp-gateway
 
-# Étape 1 : installer cmkerp-stocks dans ~/.m2 (requis par le check gateway validate)
-RUN mvn -B -pl cmkerp-stocks -am install -DskipTests -Dskip.openapi.generation=true
-
-# Étape 2 : build gateway (fat JAR)
-RUN mvn -B -pl cmkerp-gateway install -DskipTests -Dskip.openapi.generation=true \
+# Build complet : gateway + dépendances (stocks, pos, platform…) → ~/.m2 puis fat JAR
+RUN mvn -B -pl cmkerp-gateway -am install -DskipTests -Dskip.openapi.generation=true \
  && JAR="$(ls cmkerp-gateway/target/cmkerp-gateway-*.jar | grep -v original | head -1)" \
  && cp "$JAR" /src/gateway.jar
 
