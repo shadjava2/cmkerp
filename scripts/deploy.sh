@@ -78,7 +78,8 @@ cmd_install() {
   fi
   need_env
   ensure_network
-  "${COMPOSE[@]}" build --pull
+  info "Build Docker (sans cache Maven — 1ère install)"
+  "${COMPOSE[@]}" build --pull --no-cache
   "${COMPOSE[@]}" up -d --remove-orphans
   ok "Gateway démarré"
   cmd_status
