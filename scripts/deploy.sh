@@ -15,14 +15,36 @@ die()  { echo "${RED}✖ $*${NC}" >&2; exit 1; }
 ok()   { echo "${GRN}✔ $*${NC}"; }
 info() { echo "${YLW}→ $*${NC}"; }
 
+env_get() {
+  # Lit une clé du .env sans interpréter &, *, ?, etc.
+  local key="$1"
+  local line
+  line="$(grep -E "^${key}=" "$ROOT/.env" | tail -n1 || true)"
+  [[ -n "$line" ]] || { echo ""; return 0; }
+  local val="${line#*=}"
+  val="${val%$'\r'}"
+  if [[ "$val" == \"*\" ]]; then
+    val="${val:1:${#val}-2}"
+  elif [[ "$val" == \'*\' ]]; then
+    val="${val:1:${#val}-2}"
+  fi
+  printf '%s' "$val"
+}
+
 need_env() {
   [[ -f "$ROOT/.env" ]] || die "Créer .env : cp .env.deploy.example .env && nano .env"
-  set -a; # shellcheck disable=SC1091
-  source "$ROOT/.env"; set +a
-  [[ -n "${CMK_PRIMARY_DB_URL:-}" ]] || die "CMK_PRIMARY_DB_URL manquant"
-  [[ -n "${CMK_PRIMARY_DB_USER:-}" ]] || die "CMK_PRIMARY_DB_USER manquant"
-  [[ -n "${CMK_PRIMARY_DB_PASSWORD:-}" ]] || die "CMK_PRIMARY_DB_PASSWORD manquant"
-  [[ -n "${CMK_JWT_SECRET:-}" ]] || die "CMK_JWT_SECRET manquant"
+  export SPRING_PROFILES_ACTIVE="$(env_get SPRING_PROFILES_ACTIVE)"
+  export GATEWAY_HOST_PORT="$(env_get GATEWAY_HOST_PORT)"
+  export JAVA_OPTS="$(env_get JAVA_OPTS)"
+  export CMK_PRIMARY_DB_URL="$(env_get CMK_PRIMARY_DB_URL)"
+  export CMK_PRIMARY_DB_USER="$(env_get CMK_PRIMARY_DB_USER)"
+  export CMK_PRIMARY_DB_PASSWORD="$(env_get CMK_PRIMARY_DB_PASSWORD)"
+  export CMK_JWT_SECRET="$(env_get CMK_JWT_SECRET)"
+  export MAIL_PASSWORD="$(env_get MAIL_PASSWORD)"
+  [[ -n "${CMK_PRIMARY_DB_URL}" ]] || die "CMK_PRIMARY_DB_URL manquant dans .env"
+  [[ -n "${CMK_PRIMARY_DB_USER}" ]] || die "CMK_PRIMARY_DB_USER manquant dans .env"
+  [[ -n "${CMK_PRIMARY_DB_PASSWORD}" ]] || die "CMK_PRIMARY_DB_PASSWORD manquant dans .env"
+  [[ -n "${CMK_JWT_SECRET}" ]] || die "CMK_JWT_SECRET manquant dans .env"
 }
 
 ensure_docker() {
