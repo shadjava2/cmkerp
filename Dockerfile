@@ -19,7 +19,7 @@ COPY cmkerp-stocks cmkerp-stocks
 COPY cmkerp-pos cmkerp-pos
 COPY cmkerp-gateway cmkerp-gateway
 
-RUN mvn -B -pl cmkerp-gateway -am package -DskipTests \
+RUN mvn -B -pl cmkerp-gateway -am install -DskipTests \
     -Dskip.openapi.generation=true \
  && JAR="$(ls cmkerp-gateway/target/cmkerp-gateway-*.jar | grep -v original | head -1)" \
  && cp "$JAR" /src/gateway.jar
