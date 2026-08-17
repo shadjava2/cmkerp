@@ -70,7 +70,10 @@ cmd_rebuild() {
   info "Rebuild complet (--no-cache)"
   "${COMPOSE[@]}" build --pull --no-cache
   "${COMPOSE[@]}" up -d --force-recreate --remove-orphans
-  ok "Rebuild terminé — attendre boot Spring puis: ./scripts/deploy.sh test"
+  ok "Rebuild terminé"
+  wait_for_gateway
+  refresh_tunnel
+  cmd_test
 }
 
 cmd_help() {
@@ -98,7 +101,9 @@ cmd_install() {
   "${COMPOSE[@]}" up -d --remove-orphans
   ok "Gateway démarré"
   cmd_status
-  info "Attends ~1-3 min le boot Spring, puis: ./scripts/deploy.sh test"
+  wait_for_gateway
+  refresh_tunnel
+  cmd_test
 }
 
 cmd_update() {
@@ -108,12 +113,16 @@ cmd_update() {
   if git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     BRANCH="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)"
     info "git pull origin $BRANCH"
-    git -C "$ROOT" pull --ff-only origin "$BRANCH" || die "git pull échoué"
+    if ! git -C "$ROOT" pull --ff-only origin "$BRANCH"; then
+      git -C "$ROOT" checkout -- scripts/deploy.sh || true
+      git -C "$ROOT" pull --ff-only origin "$BRANCH" || die "git pull échoué"
+    fi
   fi
   "${COMPOSE[@]}" build
   "${COMPOSE[@]}" up -d --force-recreate --remove-orphans
   ok "Mise à jour déployée"
   wait_for_gateway
+  refresh_tunnel
   cmd_test
 }
 
@@ -121,6 +130,8 @@ cmd_up() {
   ensure_docker; need_env; ensure_network
   "${COMPOSE[@]}" up -d --remove-orphans
   cmd_status
+  wait_for_gateway
+  refresh_tunnel
 }
 
 cmd_down() {
@@ -160,6 +171,14 @@ wait_for_gateway() {
     sleep 5
   done
   die "Gateway pas prêt après 3 min — voir: docker compose logs gateway"
+}
+
+refresh_tunnel() {
+  if docker ps -q --filter "name=^cmk-cloudflared$" | grep -q .; then
+    info "Redémarrage cloudflared (évite 502 DNS Docker)"
+    docker restart cmk-cloudflared >/dev/null
+    sleep 8
+  fi
 }
 
 cmd_test() {
