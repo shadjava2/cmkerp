@@ -13,6 +13,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import lombok.RequiredArgsConstructor;
 
+import java.util.List;
+
 /**
  * Configuration Spring Security avec Keycloak (IAM entreprise).
  *
@@ -103,19 +105,20 @@ public class KeycloakSecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
-    configuration.addAllowedOrigin("http://localhost:3000");
-    configuration.addAllowedOrigin("http://127.0.0.1:3000");
-    configuration.addAllowedOrigin("http://localhost:3940");
-    configuration.addAllowedOrigin("https://cmkerp.com");
-    configuration.addAllowedOrigin("https://www.cmkerp.com");
+    configuration.setAllowedOriginPatterns(List.of(
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://192.168.*.*:*",
+        "http://10.*.*.*:*",
+        "https://cmkerp.com",
+        "https://www.cmkerp.com"));
     configuration.addAllowedMethod("GET");
     configuration.addAllowedMethod("POST");
     configuration.addAllowedMethod("PUT");
     configuration.addAllowedMethod("PATCH");
     configuration.addAllowedMethod("DELETE");
     configuration.addAllowedMethod("OPTIONS");
-    configuration.addAllowedHeader("Authorization");
-    configuration.addAllowedHeader("Content-Type");
+    configuration.addAllowedHeader("*");
     configuration.setAllowCredentials(true);
 
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

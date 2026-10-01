@@ -183,10 +183,19 @@ public class WebConfig implements WebMvcConfigurer {
         apiV2Cors.allowedOrigins("*");
       }
     } else {
-      List<String> origins = Arrays.asList(allowedOrigins.split(","));
-      apiV1Cors.allowedOrigins(origins.toArray(new String[0]));
-      apiV2Cors.allowedOrigins(origins.toArray(new String[0]));
-      log.info("CORS configuré pour API v1 et v2 avec {} origine(s) spécifique(s)", origins.size());
+      List<String> origins = Arrays.stream(allowedOrigins.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+      origins.addAll(List.of(
+          "http://localhost:*",
+          "http://127.0.0.1:*",
+          "http://192.168.*.*:*",
+          "http://10.*.*.*:*"));
+      String[] patterns = origins.toArray(new String[0]);
+      apiV1Cors.allowedOriginPatterns(patterns);
+      apiV2Cors.allowedOriginPatterns(patterns);
+      log.info("CORS configuré pour API v1 et v2 avec {} pattern(s) (LAN inclus)", patterns.length);
     }
 
     // Configuration pour les endpoints racine (ressources statiques, health checks, etc.)
@@ -199,8 +208,16 @@ public class WebConfig implements WebMvcConfigurer {
         rootCors.allowedOrigins("*");
       }
     } else {
-      List<String> origins = Arrays.asList(allowedOrigins.split(","));
-      rootCors.allowedOrigins(origins.toArray(new String[0]));
+      List<String> origins = Arrays.stream(allowedOrigins.split(","))
+          .map(String::trim)
+          .filter(s -> !s.isEmpty())
+          .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+      origins.addAll(List.of(
+          "http://localhost:*",
+          "http://127.0.0.1:*",
+          "http://192.168.*.*:*",
+          "http://10.*.*.*:*"));
+      rootCors.allowedOriginPatterns(origins.toArray(new String[0]));
     }
   }
 

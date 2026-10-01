@@ -192,7 +192,9 @@ public class ProduitRestController {
       @RequestParam(required = false) Double stockValue,
       @RequestParam(required = false) String prixOperator,
       @RequestParam(required = false) Double prixValue,
-      @RequestParam(required = false) Boolean perimable) {
+      @RequestParam(required = false) Boolean perimable,
+      @RequestParam(required = false) Long categorieId,
+      @RequestParam(required = false, defaultValue = "nom") String sort) {
 
     // Validation: pharmacieId est requis
     if (pharmacieId == null) {
@@ -209,7 +211,7 @@ public class ProduitRestController {
 
     PageResponse<ProduitWithStockResponse> produits = produitQueryService.findProductsWithStockPage(
         pharmacieId, nomcommercial, operationnel, pageable, perime, perimeDansXJours, stockOperator,
-        stockValue, prixOperator, prixValue, perimable);
+        stockValue, prixOperator, prixValue, perimable, categorieId, sort);
 
     return ResponseEntity.ok(produits);
   }

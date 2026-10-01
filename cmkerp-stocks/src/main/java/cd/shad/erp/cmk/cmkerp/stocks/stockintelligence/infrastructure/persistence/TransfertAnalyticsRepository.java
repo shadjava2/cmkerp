@@ -442,6 +442,68 @@ public class TransfertAnalyticsRepository {
     return jdbc.queryForList(sql, params);
   }
 
+  /**
+   * Consommation annuelle (sorties transfert) : cellules produit × mois pour pivot.
+   * Aligné sur stock opérationnel + statuts TRANSFEREE / RECEPTIONNEE.
+   */
+  public List<Map<String, Object>> rapportConsommationMensuelleCells(
+      int annee, Long categorieId, Long pharmacieId) {
+    LocalDate yearStart = LocalDate.of(annee, 1, 1);
+    LocalDate yearEndExclusive = LocalDate.of(annee + 1, 1, 1);
+    Map<String, Object> params = new HashMap<>();
+    params.put("yearStart", yearStart);
+    params.put("yearEndExclusive", yearEndExclusive);
+    params.put("categorieId", categorieId);
+    if (pharmacieId != null) {
+      params.put("pharmacieId", pharmacieId);
+    }
+    StringBuilder sql = new StringBuilder("""
+        SELECT
+          p.id AS produit_id,
+          MAX(p.nomcommercial) AS nom_commercial,
+          MAX(p.nomscientifique) AS nom_scientifique,
+          MAX(f.designation) AS forme,
+          MAX(d.designation) AS dosage,
+          MAX(c.designation) AS conditionnement,
+          MAX(p.prixachat) AS prix_achat,
+          (
+            SELECT COALESCE(SUM(s2.qte), 0)
+            FROM stock_produits s2
+            WHERE s2.fkProduits = p.id
+              AND s2.operationnel = true
+              AND (:pharmacieId IS NULL OR s2.fkPharmacies = :pharmacieId)
+          ) AS stock_actuel,
+          MAX(cat.designation) AS categorie,
+          MONTH(t.datecreate) AS mois,
+          COALESCE(SUM(CASE WHEN t.id IS NOT NULL THEN l.quantite END), 0) AS quantite
+        FROM stock_produits s
+        INNER JOIN produits p ON p.id = s.fkProduits
+        LEFT JOIN formes f ON p.fkForme = f.id
+        LEFT JOIN dosages d ON p.fkDosage = d.id
+        LEFT JOIN conditionnements c ON p.fkConditionnement = c.id
+        LEFT JOIN categorie_produit cat ON p.fkCategorie = cat.id
+        LEFT JOIN lignes_transferts_stock l ON l.fkStock = s.id
+        LEFT JOIN transferts_stock t
+          ON t.id = l.fkTransfertStock
+         AND t.datecreate >= :yearStart
+         AND t.datecreate < :yearEndExclusive
+         AND t.statut IN ('TRANSFEREE', 'RECEPTIONNEE')
+        WHERE p.fkCategorie = :categorieId
+          AND s.operationnel = true
+        """);
+    if (pharmacieId != null) {
+      sql.append(" AND s.fkPharmacies = :pharmacieId\n");
+    } else {
+      // NamedParameterJdbcTemplate exige que :pharmacieId soit présent si utiliséé dans la sous-requête
+      params.put("pharmacieId", null);
+    }
+    sql.append("""
+        GROUP BY p.id, MONTH(t.datecreate)
+        ORDER BY nom_commercial ASC, mois ASC
+        """);
+    return jdbc.queryForList(sql.toString(), params);
+  }
+
   public List<Map<String, Object>> lookupProduits(String q, int limit, Long pharmacieId, String scope) {
     Map<String, Object> params = new HashMap<>();
     params.put("limit", Math.min(limit, 200));

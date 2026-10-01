@@ -518,6 +518,131 @@ public class ApprovAnalyticsRepository {
     return jdbc.queryForList(sql, params);
   }
 
+  /**
+   * Rapport d'achat : lignes d'approvisionnement sur une période, filtrées par catégorie produit.
+   */
+  public List<Map<String, Object>> rapportAchatsParCategorie(
+      Long categorieId,
+      LocalDate dateDebut,
+      LocalDate dateFin,
+      Long pharmacieId,
+      String scope,
+      int limit) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("categorieId", categorieId);
+    params.put("dateDebut", dateDebut);
+    params.put("dateFin", dateFin);
+    params.put("limit", Math.min(Math.max(limit, 1), 5000));
+    if (pharmacieId != null) {
+      params.put("pharmacieId", pharmacieId);
+    }
+    String resolvedScope = scope != null && !scope.isBlank() ? scope : "CENTRALE";
+    StringBuilder sql = new StringBuilder("""
+        SELECT
+          a.id AS approv_id,
+          COALESCE(a.numbonliv, CONCAT('AP-', a.id)) AS reference,
+          DATE(a.datecreate) AS date_achat,
+          a.statut,
+          f.nom AS fournisseur,
+          ph.designation AS pharmacie,
+          cat.id AS categorie_id,
+          cat.designation AS categorie,
+          p.id AS produit_id,
+          COALESCE(NULLIF(TRIM(p.nomcommercial), ''), p.nomscientifique) AS produit,
+          p.nomscientifique,
+          fo.designation AS forme,
+          d.designation AS dosage,
+          cond.designation AS conditionnement,
+          COALESCE(
+            NULLIF(p.prixachat, 0),
+            (
+              SELECT la_last.prixachat
+              FROM lignes_approv la_last
+              INNER JOIN approvsionnements a_last ON la_last.fkApprov = a_last.id
+              INNER JOIN stock_produits sp_last ON la_last.fkStock = sp_last.id
+              WHERE sp_last.fkProduits = p.id
+                AND a_last.statut = 'VALIDEE'
+                AND la_last.prixachat IS NOT NULL
+                AND la_last.prixachat > 0
+              ORDER BY a_last.datecreate DESC, la_last.id DESC
+              LIMIT 1
+            ),
+            la.prixachat,
+            0
+          ) AS prix_achat_actuel,
+          la.qt AS quantite,
+          la.prixachat AS prix_unitaire,
+          COALESCE(la.prixachattotal, la.qt * la.prixachat, 0) AS montant
+        FROM lignes_approv la
+        INNER JOIN approvsionnements a ON la.fkApprov = a.id
+        INNER JOIN pharmacies ph ON a.fkPharmacie = ph.id
+        LEFT JOIN fournisseurs f ON a.fkFournisseur = f.id
+        LEFT JOIN stock_produits sp ON la.fkStock = sp.id
+        LEFT JOIN produits p ON sp.fkProduits = p.id
+        LEFT JOIN formes fo ON p.fkForme = fo.id
+        LEFT JOIN dosages d ON p.fkDosage = d.id
+        LEFT JOIN conditionnements cond ON p.fkConditionnement = cond.id
+        LEFT JOIN categorie_produit cat ON p.fkCategorie = cat.id
+        WHERE p.fkCategorie = :categorieId
+          AND DATE(a.datecreate) >= :dateDebut
+          AND DATE(a.datecreate) <= :dateFin
+          AND a.statut = 'VALIDEE'
+        """);
+    if (pharmacieId != null) {
+      sql.append(" AND a.fkPharmacie = :pharmacieId\n");
+    } else {
+      sql.append(approvScopeFilter(resolvedScope, null));
+    }
+    sql.append("""
+        ORDER BY produit ASC, a.datecreate DESC, f.nom ASC
+        LIMIT :limit
+        """);
+    return jdbc.queryForList(sql.toString(), params);
+  }
+
+  public Map<String, Object> rapportAchatsParCategorieSynthese(
+      Long categorieId,
+      LocalDate dateDebut,
+      LocalDate dateFin,
+      Long pharmacieId,
+      String scope) {
+    Map<String, Object> params = new HashMap<>();
+    params.put("categorieId", categorieId);
+    params.put("dateDebut", dateDebut);
+    params.put("dateFin", dateFin);
+    if (pharmacieId != null) {
+      params.put("pharmacieId", pharmacieId);
+    }
+    String resolvedScope = scope != null && !scope.isBlank() ? scope : "CENTRALE";
+    StringBuilder sql = new StringBuilder("""
+        SELECT
+          COUNT(*) AS nb_lignes,
+          COUNT(DISTINCT a.id) AS nb_approv,
+          COUNT(DISTINCT p.id) AS nb_produits,
+          COUNT(DISTINCT a.fkFournisseur) AS nb_fournisseurs,
+          COALESCE(SUM(la.qt), 0) AS quantite_totale,
+          COALESCE(SUM(COALESCE(la.prixachattotal, la.qt * la.prixachat, 0)), 0) AS montant_total,
+          MAX(cat.designation) AS categorie
+        FROM lignes_approv la
+        INNER JOIN approvsionnements a ON la.fkApprov = a.id
+        INNER JOIN pharmacies ph ON a.fkPharmacie = ph.id
+        LEFT JOIN stock_produits sp ON la.fkStock = sp.id
+        LEFT JOIN produits p ON sp.fkProduits = p.id
+        LEFT JOIN categorie_produit cat ON p.fkCategorie = cat.id
+        WHERE p.fkCategorie = :categorieId
+          AND DATE(a.datecreate) >= :dateDebut
+          AND DATE(a.datecreate) <= :dateFin
+          AND a.statut = 'VALIDEE'
+        """);
+    if (pharmacieId != null) {
+      sql.append(" AND a.fkPharmacie = :pharmacieId\n");
+    } else {
+      sql.append(approvScopeFilter(resolvedScope, null));
+    }
+    List<Map<String, Object>> rows = jdbc.queryForList(sql.toString(), params);
+    return rows.isEmpty() ? Map.of() : rows.get(0);
+  }
+
   public List<Map<String, Object>> lookupProduits(String q, int limit, Long pharmacieId, String scope) {
     Map<String, Object> params = new HashMap<>();
     params.put("limit", Math.min(limit, 200));

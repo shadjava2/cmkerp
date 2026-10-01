@@ -92,6 +92,45 @@ public class ApprovAnalyticsService {
     return repository.lookupProduits(q, limit, pharmacieId, scope);
   }
 
+  /**
+   * Rapport achats d'une période par catégorie produit (lignes + synthèse).
+   */
+  public Map<String, Object> rapportAchatsParCategorie(
+      Long categorieId,
+      LocalDate dateDebut,
+      LocalDate dateFin,
+      Long pharmacieId,
+      String scope,
+      int limit) {
+    if (categorieId == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "categorieId obligatoire");
+    }
+    if (dateDebut == null || dateFin == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dateDebut et dateFin obligatoires");
+    }
+    if (dateFin.isBefore(dateDebut)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "dateFin doit être ≥ dateDebut");
+    }
+    Map<String, Object> synthese =
+        repository.rapportAchatsParCategorieSynthese(categorieId, dateDebut, dateFin, pharmacieId, scope);
+    List<Map<String, Object>> lignes =
+        repository.rapportAchatsParCategorie(categorieId, dateDebut, dateFin, pharmacieId, scope, limit);
+    for (Map<String, Object> ligne : lignes) {
+      Object prix = ligne.get("prix_achat_actuel");
+      if (prix != null) {
+        ligne.put("prixAchatActuel", prix);
+      }
+    }
+    Map<String, Object> out = new java.util.LinkedHashMap<>();
+    out.put("categorieId", categorieId);
+    out.put("dateDebut", dateDebut.toString());
+    out.put("dateFin", dateFin.toString());
+    out.put("pharmacieId", pharmacieId);
+    out.put("synthese", synthese);
+    out.put("lignes", lignes);
+    return out;
+  }
+
   public static ApprovSearchCriteria fromParams(
       LocalDate dateDebut,
       LocalDate dateFin,

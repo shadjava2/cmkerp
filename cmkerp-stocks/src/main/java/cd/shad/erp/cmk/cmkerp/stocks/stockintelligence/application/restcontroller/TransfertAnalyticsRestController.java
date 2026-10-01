@@ -140,6 +140,15 @@ public class TransfertAnalyticsRestController {
     return ResponseEntity.ok(require().lookupProduits(q, limit, pharmacieId, scope));
   }
 
+  @GetMapping("/rapports/consommation-annuelle")
+  @Operation(summary = "Rapport consommation (transferts) mois par mois sur 1 an")
+  public ResponseEntity<Map<String, Object>> rapportConsommationAnnuelle(
+      @RequestParam Long categorieId,
+      @RequestParam(required = false) Integer annee,
+      @RequestParam(required = false) Long pharmacieId) {
+    return ResponseEntity.ok(require().rapportConsommationAnnuelle(annee, categorieId, pharmacieId));
+  }
+
   private TransfertAnalyticsService require() {
     return service.orElseThrow(() -> new IllegalStateException("Module transferts analytics indisponible"));
   }

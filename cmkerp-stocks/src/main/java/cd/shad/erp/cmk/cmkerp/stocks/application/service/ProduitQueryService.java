@@ -628,9 +628,28 @@ public class ProduitQueryService {
             String prixOperator,
             Double prixValue,
             Boolean perimable) {
+        return findProductsWithStockPage(
+                pharmacieId, nomcommercial, operationnel, pageable, perime, perimeDansXJours,
+                stockOperator, stockValue, prixOperator, prixValue, perimable, null, "nom");
+    }
 
-        log.debug("Récupération page/size des produits avec stock: pharmacieId={}, nomcommercial={}, operationnel={}, page={}, size={}, perime={}, perimeDansXJours={}, stockOperator={}, stockValue={}, prixOperator={}, prixValue={}, perimable={}",
-                pharmacieId, nomcommercial, operationnel, pageable.getPageNumber(), pageable.getPageSize(), perime, perimeDansXJours, stockOperator, stockValue, prixOperator, prixValue, perimable);
+    public PageResponse<ProduitWithStockResponse> findProductsWithStockPage(
+            Long pharmacieId,
+            String nomcommercial,
+            Boolean operationnel,
+            Pageable pageable,
+            Boolean perime,
+            Integer perimeDansXJours,
+            String stockOperator,
+            Double stockValue,
+            String prixOperator,
+            Double prixValue,
+            Boolean perimable,
+            Long categorieId,
+            String sort) {
+
+        log.debug("Récupération page/size des produits avec stock: pharmacieId={}, nomcommercial={}, operationnel={}, page={}, size={}, perime={}, perimeDansXJours={}, stockOperator={}, stockValue={}, prixOperator={}, prixValue={}, perimable={}, categorieId={}, sort={}",
+                pharmacieId, nomcommercial, operationnel, pageable.getPageNumber(), pageable.getPageSize(), perime, perimeDansXJours, stockOperator, stockValue, prixOperator, prixValue, perimable, categorieId, sort);
 
         try {
             // Base FROM commune - Filtrage direct par pharmacie dans les JOINs pour garantir l'unicité
@@ -672,6 +691,12 @@ public class ProduitQueryService {
             if (perimable != null) {
                 whereClause.append(" AND p.perimable = :perimable");
                 params.put("perimable", perimable);
+            }
+
+            // Filtre / tri par catégorie produit
+            if (categorieId != null && categorieId > 0) {
+                whereClause.append(" AND p.fkCategorie = :categorieId");
+                params.put("categorieId", categorieId);
             }
 
             // Filtre sur le stock
@@ -794,7 +819,12 @@ public class ProduitQueryService {
             sqlBuilder.append(" ").append(whereClauseStr);
 
             // Tri et pagination
-            sqlBuilder.append(" ORDER BY p.nomcommercial ASC");
+            String sortKey = sort != null ? sort.trim().toLowerCase() : "nom";
+            if ("categorie".equals(sortKey) || "category".equals(sortKey)) {
+                sqlBuilder.append(" ORDER BY ct.designation ASC, p.nomcommercial ASC");
+            } else {
+                sqlBuilder.append(" ORDER BY p.nomcommercial ASC");
+            }
             sqlBuilder.append(" LIMIT :limit OFFSET :offset");
 
             params.put("limit", pageable.getPageSize());

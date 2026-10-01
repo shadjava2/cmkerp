@@ -11,8 +11,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -59,7 +59,6 @@ import java.util.function.Supplier;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @Order(1) // Exécuter avant les filtres de sécurité
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -99,6 +98,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private Counter rateLimitFallbackCounter;
     private Timer rateLimitCheckTimer;
 
+    public RateLimitFilter(ObjectProvider<ProxyManager<String>> proxyManagerProvider, MeterRegistry meterRegistry) {
+        this.proxyManager = proxyManagerProvider.getIfAvailable();
+        this.meterRegistry = meterRegistry;
+    }
+
     /**
      * Initialise les métriques Micrometer après l'injection des dépendances.
      */
@@ -131,7 +135,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
 
-        if (!enabled) {
+        if (!enabled || proxyManager == null) {
             filterChain.doFilter(request, response);
             return;
         }

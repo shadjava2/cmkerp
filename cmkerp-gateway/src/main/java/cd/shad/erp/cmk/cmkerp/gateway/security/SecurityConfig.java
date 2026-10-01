@@ -150,10 +150,25 @@ public class SecurityConfig {
         .map(String::trim)
         .filter(s -> !s.isEmpty())
         .toList();
+    // Patterns LAN : console ouverte en http://IP:3940 → API http://IP:8999
+    List<String> patterns = new java.util.ArrayList<>(List.of(
+        "http://localhost:*",
+        "http://127.0.0.1:*",
+        "http://192.168.*.*:*",
+        "http://10.*.*.*:*",
+        "https://cmkerp.com",
+        "https://www.cmkerp.com",
+        "http://cmkerp.com",
+        "http://www.cmkerp.com"));
+    for (String origin : origins) {
+      if (!patterns.contains(origin)) {
+        patterns.add(origin);
+      }
+    }
     if ("*".equals(allowedOrigins.trim()) && allowCredentials) {
       configuration.setAllowedOriginPatterns(List.of("*"));
     } else {
-      configuration.setAllowedOrigins(origins);
+      configuration.setAllowedOriginPatterns(patterns);
     }
     configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     configuration.setAllowedHeaders(List.of("*"));

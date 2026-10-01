@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -84,6 +85,10 @@ public class RedisConfig {
 
   @Value("${spring.data.redis.timeout:2000}")
   private long redisTimeoutMs;
+
+  /** false en profil dev (Windows sans Redis) → cache ConcurrentMap au lieu de Redis. */
+  @Value("${cmkerp.redis.cache-enabled:true}")
+  private boolean redisCacheEnabled;
 
   /**
    * Configuration de la connexion Redis avec Lettuce (client non-bloquant) et pool optimisé.
@@ -219,6 +224,12 @@ public class RedisConfig {
   @Bean
   public CacheManager cacheManager(RedisConnectionFactory connectionFactory,
       ObjectMapper redisObjectMapper) {
+    if (!redisCacheEnabled) {
+      log.warn(
+          "cmkerp.redis.cache-enabled=false → ConcurrentMapCacheManager (pas de Redis pour @Cacheable)");
+      return new ConcurrentMapCacheManager();
+    }
+
     // Serializer JSON avec support Java 8 date/time
     GenericJackson2JsonRedisSerializer jsonSerializer =
         new GenericJackson2JsonRedisSerializer(redisObjectMapper);

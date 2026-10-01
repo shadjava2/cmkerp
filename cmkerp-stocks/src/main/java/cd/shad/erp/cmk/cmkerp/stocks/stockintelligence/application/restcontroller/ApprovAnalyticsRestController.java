@@ -133,6 +133,19 @@ public class ApprovAnalyticsRestController {
     return ResponseEntity.ok(require().lookupProduits(q, limit, pharmacieId, scope));
   }
 
+  @GetMapping("/rapports/achats-par-categorie")
+  @Operation(summary = "Rapport d'achat d'une période par catégorie produit")
+  public ResponseEntity<Map<String, Object>> rapportAchatsParCategorie(
+      @RequestParam Long categorieId,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateDebut,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate dateFin,
+      @RequestParam(required = false) Long pharmacieId,
+      @RequestParam(required = false, defaultValue = "CENTRALE") String scope,
+      @RequestParam(defaultValue = "2000") int limit) {
+    return ResponseEntity.ok(
+        require().rapportAchatsParCategorie(categorieId, dateDebut, dateFin, pharmacieId, scope, limit));
+  }
+
   private ApprovAnalyticsService require() {
     return service.orElseThrow(() -> new IllegalStateException("Module approvisionnements analytics indisponible"));
   }

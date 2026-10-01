@@ -61,6 +61,8 @@ cmkerp:
   # POOL REDIS DEV - Configuration réduite pour développement
   # ==========================================
   redis:
+    # @Cacheable en mémoire locale — évite 500 sur /categories si Redis absent
+    cache-enabled: false
     pool:
       # Pool réduit pour développement (une seule instance locale)
       max-active: 16
@@ -73,6 +75,9 @@ cmkerp:
   # KAFKA DEV - Désactivé par défaut
   # ==========================================
   kafka:
+    enabled: false
+  # Redis souvent absent en local Windows → ne pas bloquer le démarrage
+  rate-limit:
     enabled: false
   async:
     # Configuration du pool de threads async (pour @Async)
@@ -152,6 +157,10 @@ spring:
         cache:
           use_second_level_cache: false
           use_query_cache: false
+
+  # Cache Spring (@Cacheable) : simple en mémoire (Redis absent en local)
+  cache:
+    type: simple
 
   # Démarrage plus léger en DEV
   # OPTIMISATION: Désactiver lazy-initialization pour éviter les ClassNotFoundException
@@ -239,6 +248,9 @@ logging:
 management:
   health:
     mail:
+      enabled: false
+    # Redis souvent absent en local Windows → ne pas faire échouer /actuator/health (503)
+    redis:
       enabled: false
   endpoint:
     health:
