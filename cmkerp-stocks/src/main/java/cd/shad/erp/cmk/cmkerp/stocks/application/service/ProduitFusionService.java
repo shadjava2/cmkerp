@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,12 +24,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProduitFusionService {
 
+  private final JdbcTemplate jdbc;
   private final NamedParameterJdbcTemplate namedJdbc;
   private final CliniqueLookupRepository cliniqueLookupRepository;
 
   public ProduitFusionService(
+      @Qualifier("primaryJdbcTemplate") JdbcTemplate jdbc,
       @Qualifier("primaryNamedParameterJdbcTemplate") NamedParameterJdbcTemplate namedJdbc,
       CliniqueLookupRepository cliniqueLookupRepository) {
+    this.jdbc = jdbc;
     this.namedJdbc = namedJdbc;
     this.cliniqueLookupRepository = cliniqueLookupRepository;
   }
@@ -40,42 +44,53 @@ public class ProduitFusionService {
     int offset = safePage * safeSize;
 
     StringBuilder where = new StringBuilder(" WHERE 1=1 ");
-    Map<String, Object> params = new HashMap<>();
+    java.util.ArrayList<Object> args = new java.util.ArrayList<>();
+
     if (query != null && !query.isBlank()) {
       where.append(
-          " AND (LOWER(p.nomcommercial) LIKE :q OR LOWER(p.nomscientifique) LIKE :q OR LOWER(IFNULL(p.codebarre,'')) LIKE :q OR LOWER(IFNULL(p.CODECLINIQUE,'')) LIKE :q)");
-      params.put("q", "%" + query.trim().toLowerCase() + "%");
+          " AND (LOWER(p.nomcommercial) LIKE ? OR LOWER(p.nomscientifique) LIKE ?"
+              + " OR LOWER(IFNULL(p.codebarre,'')) LIKE ?"
+              + " OR LOWER(IFNULL(p.`CODECLINIQUE`,'')) LIKE ?)");
+      String like = "%" + query.trim().toLowerCase() + "%";
+      args.add(like);
+      args.add(like);
+      args.add(like);
+      args.add(like);
     }
     if ("linked".equalsIgnoreCase(linkFilter)) {
-      where.append(" AND p.CODECLINIQUE IS NOT NULL AND TRIM(p.CODECLINIQUE) <> ''");
+      where.append(" AND p.`CODECLINIQUE` IS NOT NULL AND TRIM(p.`CODECLINIQUE`) <> ''");
     } else if ("unlinked".equalsIgnoreCase(linkFilter)) {
-      where.append(" AND (p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = '')");
+      where.append(" AND (p.`CODECLINIQUE` IS NULL OR TRIM(p.`CODECLINIQUE`) = '')");
     }
 
-    Long total = namedJdbc.queryForObject(
+    Long total = jdbc.queryForObject(
         "SELECT COUNT(*) FROM produits p" + where,
-        params,
-        Long.class);
+        Long.class,
+        args.toArray());
 
-    params.put("limit", safeSize);
-    params.put("offset", offset);
-    List<ProduitFusionItemResponse> items = namedJdbc.query(
-        """
-        SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE AS codeClinique
-        FROM produits p
-        """ + where + """
-         ORDER BY p.nomcommercial ASC
-         LIMIT :limit OFFSET :offset
-        """,
-        params,
+    // LIMIT/OFFSET en littéraux bornés (évite soucis PreparedStatement MySQL)
+    String sql =
+        "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat,"
+            + " p.`CODECLINIQUE` AS code_clinique"
+            + " FROM produits p"
+            + where
+            + " ORDER BY p.nomcommercial ASC"
+            + " LIMIT "
+            + safeSize
+            + " OFFSET "
+            + offset;
+
+    List<ProduitFusionItemResponse> items = jdbc.query(
+        sql,
         (rs, rowNum) -> ProduitFusionItemResponse.builder()
             .id(rs.getLong("id"))
             .codebarre(rs.getString("codebarre"))
             .nomcommercial(rs.getString("nomcommercial"))
             .nomscientifique(rs.getString("nomscientifique"))
             .prixachat(rs.getBigDecimal("prixachat"))
-            .codeClinique(rs.getString("codeClinique"))
-            .build());
+            .codeClinique(rs.getString("code_clinique"))
+            .build(),
+        args.toArray());
 
     Map<String, Object> result = new HashMap<>();
     result.put("content", items);
@@ -118,45 +133,47 @@ public class ProduitFusionService {
     }
 
     String code = codeClinique == null || codeClinique.isBlank() ? null : codeClinique.trim();
+    long uid = userId != null ? userId : 0L;
 
     if (code != null) {
       namedJdbc.update(
           """
           UPDATE produits
-          SET CODECLINIQUE = NULL, dateupdate = NOW(), userupdateid = :userId
-          WHERE CODECLINIQUE = :code AND id <> :id
+          SET `CODECLINIQUE` = NULL, dateupdate = NOW(), userupdatedid = :userId
+          WHERE `CODECLINIQUE` = :code AND id <> :id
           """,
-          Map.of("code", code, "id", produitId, "userId", userId != null ? userId : 0L));
+          Map.of("code", code, "id", produitId, "userId", uid));
     }
 
     Map<String, Object> params = new HashMap<>();
     params.put("id", produitId);
     params.put("code", code);
-    params.put("userId", userId != null ? userId : 0L);
+    params.put("userId", uid);
     namedJdbc.update(
         """
         UPDATE produits
-        SET CODECLINIQUE = :code, dateupdate = NOW(), userupdateid = :userId
+        SET `CODECLINIQUE` = :code, dateupdate = NOW(), userupdatedid = :userId
         WHERE id = :id
         """,
         params);
 
     log.info("Produit {} lié à CODECLINIQUE={}", produitId, code);
 
-    List<ProduitFusionItemResponse> rows = namedJdbc.query(
-        """
-        SELECT id, codebarre, nomcommercial, nomscientifique, prixachat, CODECLINIQUE AS codeClinique
-        FROM produits WHERE id = :id
-        """,
-        Map.of("id", produitId),
-        (rs, rowNum) -> ProduitFusionItemResponse.builder()
-            .id(rs.getLong("id"))
-            .codebarre(rs.getString("codebarre"))
-            .nomcommercial(rs.getString("nomcommercial"))
-            .nomscientifique(rs.getString("nomscientifique"))
-            .prixachat(rs.getBigDecimal("prixachat"))
-            .codeClinique(rs.getString("codeClinique"))
-            .build());
-    return rows.get(0);
+    return jdbc.query(
+            """
+            SELECT id, codebarre, nomcommercial, nomscientifique, prixachat,
+                   `CODECLINIQUE` AS code_clinique
+            FROM produits WHERE id = ?
+            """,
+            (rs, rowNum) -> ProduitFusionItemResponse.builder()
+                .id(rs.getLong("id"))
+                .codebarre(rs.getString("codebarre"))
+                .nomcommercial(rs.getString("nomcommercial"))
+                .nomscientifique(rs.getString("nomscientifique"))
+                .prixachat(rs.getBigDecimal("prixachat"))
+                .codeClinique(rs.getString("code_clinique"))
+                .build(),
+            produitId)
+        .get(0);
   }
 }
