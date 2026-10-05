@@ -1,5 +1,7 @@
 package cd.shad.erp.cmk.cmkerp.stocks.application.service;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueLookupRepository;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueProduit;
+import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.BusinessException;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.NotFoundException;
 import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.ProduitFusionItemResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -41,8 +44,6 @@ public class ProduitFusionService {
 
   @Transactional(readOnly = true)
   public Map<String, Object> listCmkerp(String query, String linkFilter, int page, int size) {
-    ensureCodeCliniqueColumn();
-
     int safeSize = Math.max(1, Math.min(size, 100));
     int safePage = Math.max(0, page);
     int offset = safePage * safeSize;
@@ -52,7 +53,8 @@ public class ProduitFusionService {
 
     if (query != null && !query.isBlank()) {
       where.append(
-          " AND (LOWER(p.nomcommercial) LIKE ? OR LOWER(p.nomscientifique) LIKE ?"
+          " AND (LOWER(IFNULL(p.nomcommercial,'')) LIKE ?"
+              + " OR LOWER(IFNULL(p.nomscientifique,'')) LIKE ?"
               + " OR LOWER(IFNULL(p.codebarre,'')) LIKE ?"
               + " OR LOWER(IFNULL(p.CODECLINIQUE,'')) LIKE ?)");
       String like = "%" + query.trim().toLowerCase() + "%";
@@ -62,44 +64,38 @@ public class ProduitFusionService {
       args.add(like);
     }
     if ("linked".equalsIgnoreCase(linkFilter)) {
-      where.append(" AND p.CODECLINIQUE IS NOT NULL AND TRIM(p.CODECLINIQUE) <> ''");
+      where.append(" AND p.CODECLINIQUE IS NOT NULL AND p.CODECLINIQUE <> ''");
     } else if ("unlinked".equalsIgnoreCase(linkFilter)) {
-      where.append(" AND (p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = '')");
+      where.append(" AND (p.CODECLINIQUE IS NULL OR p.CODECLINIQUE = '')");
     }
 
-    Long total = jdbc.queryForObject(
-        "SELECT COUNT(*) FROM produits p" + where,
-        Long.class,
-        args.toArray());
+    try {
+      Long total = jdbc.queryForObject(
+          "SELECT COUNT(*) FROM produits p" + where,
+          Long.class,
+          args.toArray());
 
-    String sql =
-        "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE"
-            + " FROM produits p"
-            + where
-            + " ORDER BY p.nomcommercial ASC"
-            + " LIMIT "
-            + safeSize
-            + " OFFSET "
-            + offset;
+      String sql =
+          "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE"
+              + " FROM produits p"
+              + where
+              + " ORDER BY p.nomcommercial ASC"
+              + " LIMIT "
+              + safeSize
+              + " OFFSET "
+              + offset;
 
-    List<ProduitFusionItemResponse> items = jdbc.query(
-        sql,
-        (rs, rowNum) -> ProduitFusionItemResponse.builder()
-            .id(rs.getLong("id"))
-            .codebarre(rs.getString("codebarre"))
-            .nomcommercial(rs.getString("nomcommercial"))
-            .nomscientifique(rs.getString("nomscientifique"))
-            .prixachat(rs.getBigDecimal("prixachat"))
-            .codeClinique(rs.getString("CODECLINIQUE"))
-            .build(),
-        args.toArray());
+      List<ProduitFusionItemResponse> items = jdbc.query(sql, this::mapErpRow, args.toArray());
 
-    Map<String, Object> result = new HashMap<>();
-    result.put("content", items);
-    result.put("totalElements", total != null ? total : 0L);
-    result.put("page", safePage);
-    result.put("size", safeSize);
-    return result;
+      Map<String, Object> result = new HashMap<>();
+      result.put("content", items);
+      result.put("totalElements", total != null ? total : 0L);
+      result.put("page", safePage);
+      result.put("size", safeSize);
+      return result;
+    } catch (DataAccessException ex) {
+      throw sqlFailure("listCmkerp", ex);
+    }
   }
 
   @Transactional(readOnly = true)
@@ -122,91 +118,84 @@ public class ProduitFusionService {
 
   @Transactional
   public ProduitFusionItemResponse link(Long produitId, String codeClinique, Long userId) {
-    ensureCodeCliniqueColumn();
-
-    Integer exists = namedJdbc.queryForObject(
-        "SELECT COUNT(*) FROM produits WHERE id = :id",
-        Map.of("id", produitId),
-        Integer.class);
-    if (exists == null || exists == 0) {
-      throw NotFoundException.entity("Produit", produitId);
-    }
-
-    String code = codeClinique == null || codeClinique.isBlank() ? null : codeClinique.trim();
-    long uid = userId != null ? userId : 0L;
-
-    if (code != null) {
-      Map<String, Object> clearParams = new HashMap<>();
-      clearParams.put("code", code);
-      clearParams.put("id", produitId);
-      clearParams.put("userId", uid);
-      namedJdbc.update(
-          "UPDATE produits SET CODECLINIQUE = NULL, dateupdate = NOW(), userupdateid = :userId"
-              + " WHERE CODECLINIQUE = :code AND id <> :id",
-          clearParams);
-    }
-
-    Map<String, Object> params = new HashMap<>();
-    params.put("id", produitId);
-    params.put("code", code);
-    params.put("userId", uid);
-    namedJdbc.update(
-        "UPDATE produits SET CODECLINIQUE = :code, dateupdate = NOW(), userupdateid = :userId WHERE id = :id",
-        params);
-
-    log.info("Produit {} lié à CODECLINIQUE={}", produitId, code);
-
-    return jdbc.query(
-            "SELECT id, codebarre, nomcommercial, nomscientifique, prixachat, CODECLINIQUE"
-                + " FROM produits WHERE id = ?",
-            (rs, rowNum) -> ProduitFusionItemResponse.builder()
-                .id(rs.getLong("id"))
-                .codebarre(rs.getString("codebarre"))
-                .nomcommercial(rs.getString("nomcommercial"))
-                .nomscientifique(rs.getString("nomscientifique"))
-                .prixachat(rs.getBigDecimal("prixachat"))
-                .codeClinique(rs.getString("CODECLINIQUE"))
-                .build(),
-            produitId)
-        .get(0);
-  }
-
-  /**
-   * Vérifie que la colonne existe. Ne crée rien automatiquement (prod).
-   * Message d'erreur explicite si absente sur la base réellement connectée.
-   */
-  private void ensureCodeCliniqueColumn() {
     try {
-      Integer count = jdbc.queryForObject(
-          "SELECT COUNT(*) FROM information_schema.COLUMNS"
-              + " WHERE TABLE_SCHEMA = DATABASE()"
-              + " AND TABLE_NAME = 'produits'"
-              + " AND UPPER(COLUMN_NAME) = 'CODECLINIQUE'",
+      Integer exists = namedJdbc.queryForObject(
+          "SELECT COUNT(*) FROM produits WHERE id = :id",
+          Map.of("id", produitId),
           Integer.class);
-      if (count == null || count == 0) {
-        throw missingColumn();
+      if (exists == null || exists == 0) {
+        throw NotFoundException.entity("Produit", produitId);
       }
-    } catch (IllegalStateException ex) {
+
+      String code = codeClinique == null || codeClinique.isBlank() ? null : codeClinique.trim();
+      long uid = userId != null ? userId : 0L;
+
+      if (code != null) {
+        Map<String, Object> clearParams = new HashMap<>();
+        clearParams.put("code", code);
+        clearParams.put("id", produitId);
+        clearParams.put("userId", uid);
+        namedJdbc.update(
+            "UPDATE produits SET CODECLINIQUE = NULL, dateupdate = NOW(), userupdateid = :userId"
+                + " WHERE CODECLINIQUE = :code AND id <> :id",
+            clearParams);
+      }
+
+      Map<String, Object> params = new HashMap<>();
+      params.put("id", produitId);
+      params.put("code", code);
+      params.put("userId", uid);
+      namedJdbc.update(
+          "UPDATE produits SET CODECLINIQUE = :code, dateupdate = NOW(), userupdateid = :userId WHERE id = :id",
+          params);
+
+      log.info("Produit {} lié à CODECLINIQUE={}", produitId, code);
+
+      return jdbc.query(
+              "SELECT id, codebarre, nomcommercial, nomscientifique, prixachat, CODECLINIQUE"
+                  + " FROM produits WHERE id = ?",
+              this::mapErpRow,
+              produitId)
+          .get(0);
+    } catch (NotFoundException ex) {
       throw ex;
     } catch (DataAccessException ex) {
-      log.warn("Vérification CODECLINIQUE via information_schema: {}", ex.getMessage());
+      throw sqlFailure("link", ex);
+    }
+  }
+
+  private ProduitFusionItemResponse mapErpRow(ResultSet rs, int rowNum) throws SQLException {
+    return ProduitFusionItemResponse.builder()
+        .id(rs.getLong("id"))
+        .codebarre(rs.getString("codebarre"))
+        .nomcommercial(rs.getString("nomcommercial"))
+        .nomscientifique(rs.getString("nomscientifique"))
+        .prixachat(rs.getBigDecimal("prixachat"))
+        .codeClinique(readCodeClinique(rs))
+        .build();
+  }
+
+  private static String readCodeClinique(ResultSet rs) throws SQLException {
+    try {
+      return rs.getString("CODECLINIQUE");
+    } catch (SQLException first) {
       try {
-        jdbc.queryForList("SELECT CODECLINIQUE FROM produits LIMIT 1");
-      } catch (DataAccessException probe) {
-        throw missingColumn(probe);
+        return rs.getString("codeclinique");
+      } catch (SQLException second) {
+        return rs.getString(6);
       }
     }
   }
 
-  private static IllegalStateException missingColumn() {
-    return missingColumn(null);
-  }
-
-  private static IllegalStateException missingColumn(Throwable cause) {
-    String msg =
-        "Colonne produits.CODECLINIQUE introuvable sur la base MySQL connectée par l'API. "
-            + "Exécuter sur cmkerp-v24prod : "
-            + "ALTER TABLE produits ADD COLUMN CODECLINIQUE VARCHAR(255) NULL;";
-    return cause == null ? new IllegalStateException(msg) : new IllegalStateException(msg, cause);
+  private static BusinessException sqlFailure(String op, DataAccessException ex) {
+    Throwable root = ex;
+    while (root.getCause() != null && root.getCause() != root) {
+      root = root.getCause();
+    }
+    String detail = root.getMessage() != null ? root.getMessage() : ex.getMessage();
+    log.error("Fusion ERP {} failed: {}", op, detail, ex);
+    return new BusinessException(
+        "Erreur SQL fusion ERP (" + op + "): " + detail
+            + " — vérifier que la colonne produits.CODECLINIQUE existe sur la base du .env gateway.");
   }
 }
