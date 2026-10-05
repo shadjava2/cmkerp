@@ -372,6 +372,12 @@ platform:
     primary:
       fetch-size: 250
       query-timeout: 30
+    mediline:
+      fetch-size: 250
+      query-timeout: 30
+    clinique:
+      fetch-size: 250
+      query-timeout: 30
   # CORS — console (cmkerp.com) → API (api.cmkerp.com)
   cors:
     allowed-origins: ${CMK_CORS_ORIGINS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:3838,http://127.0.0.1:3838,http://localhost:3940,http://127.0.0.1:3940,https://cmkerp.com,https://www.cmkerp.com,http://cmkerp.com,http://www.cmkerp.com}

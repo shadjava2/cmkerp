@@ -194,6 +194,13 @@ public final class ApiPaths {
   public static final String HEALTH_BASE = API_V1 + "/health";
 
   /**
+   * Statut des datasources (primaire + Mediline + CLINIQUE).
+   * <p>
+   * GET /api/v1/datasources/status — diagnostic ; Mediline/CLINIQUE down ne renvoie pas 503.
+   */
+  public static final String DATASOURCES_STATUS = API_V1 + "/datasources/status";
+
+  /**
    * Base pour les endpoints du module Inventory (Stock).
    * <p>
    * Exemples :

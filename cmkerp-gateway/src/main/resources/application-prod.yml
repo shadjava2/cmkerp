@@ -20,6 +20,28 @@ cmk:
       auto-commit: false
       register-mbeans: true
       leak-detection-threshold: 60000
+    # Mediline / RIS (MySQL production) — optionnel, pas de Flyway, pas de JOIN cross-base
+    mediline:
+      url: ${CMK_MEDILINE_DB_URL:}
+      username: ${CMK_MEDILINE_DB_USER:}
+      password: ${CMK_MEDILINE_DB_PASSWORD:}
+      driver-class-name: com.mysql.cj.jdbc.Driver
+      pool-name: CMK-ERP-MedilinePool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
+    # CLINIQUE (SQL Server) — optionnel, lecture seule, pas de Flyway
+    clinique:
+      url: ${CMK_CLINIQUE_DB_URL:}
+      username: ${CMK_CLINIQUE_DB_USER:}
+      password: ${CMK_CLINIQUE_DB_PASSWORD:}
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      pool-name: CMK-ERP-CliniquePool
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
 
 # ==========================================
 # POOL HIKARI PROD - Configuration optimisée pour haute charge
