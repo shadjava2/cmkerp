@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueLookupRepository;
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueProduit;
 
 /**
  * Stub CLINIQUE quand l'URL SQL Server est vide.
@@ -29,5 +30,15 @@ public class CliniqueLookupRepositoryStub implements CliniqueLookupRepository {
   @Override
   public List<Map<String, Object>> findTarifs(int limit) {
     return Collections.emptyList();
+  }
+
+  @Override
+  public List<CliniqueProduit> searchProduits(String query, int offset, int limit) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public long countProduits(String query) {
+    return 0L;
   }
 }
