@@ -2,12 +2,14 @@ package cd.shad.erp.cmk.cmkerp.stocks.application.restcontroller;
 
 import static cd.shad.erp.cmk.cmkerp.sharedkernel.config.ApiPaths.STOCKS_BASE;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,7 +18,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.AuthTokenExtractor;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.JwtTokenProvider;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.request.BatchLinkCodeCliniqueRequest;
 import cd.shad.erp.cmk.cmkerp.stocks.application.dto.request.LinkCodeCliniqueRequest;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.BatchLinkResultResponse;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.FusionStatsResponse;
+import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.FusionSuggestionResponse;
 import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.ProduitFusionItemResponse;
 import cd.shad.erp.cmk.cmkerp.stocks.application.service.ProduitFusionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,11 +42,17 @@ public class ProduitFusionRestController {
   private final ProduitFusionService produitFusionService;
   private final JwtTokenProvider jwtTokenProvider;
 
+  @GetMapping("/stats")
+  @Operation(summary = "Compteurs liés / non liés ERP + CLINIQUE")
+  public ResponseEntity<FusionStatsResponse> stats() {
+    return ResponseEntity.ok(produitFusionService.stats());
+  }
+
   @GetMapping("/cmkerp")
   @Operation(summary = "Liste produits CMKERP pour fusion")
   public ResponseEntity<Map<String, Object>> listCmkerp(
       @RequestParam(required = false) String q,
-      @RequestParam(required = false, defaultValue = "all") String linkFilter,
+      @RequestParam(required = false, defaultValue = "unlinked") String linkFilter,
       @RequestParam(required = false, defaultValue = "0") int page,
       @RequestParam(required = false, defaultValue = "50") int size) {
     return ResponseEntity.ok(produitFusionService.listCmkerp(q, linkFilter, page, size));
@@ -50,9 +62,18 @@ public class ProduitFusionRestController {
   @Operation(summary = "Liste produits CLINIQUE (TPRODUIT) lecture seule")
   public ResponseEntity<Map<String, Object>> listClinique(
       @RequestParam(required = false) String q,
+      @RequestParam(required = false, defaultValue = "unlinked") String linkFilter,
       @RequestParam(required = false, defaultValue = "0") int page,
       @RequestParam(required = false, defaultValue = "50") int size) {
-    return ResponseEntity.ok(produitFusionService.listClinique(q, page, size));
+    return ResponseEntity.ok(produitFusionService.listClinique(q, linkFilter, page, size));
+  }
+
+  @GetMapping("/suggestions")
+  @Operation(summary = "Propositions automatiques de liaison par similarité de désignation")
+  public ResponseEntity<List<FusionSuggestionResponse>> suggestions(
+      @RequestParam(required = false, defaultValue = "0.78") double minScore,
+      @RequestParam(required = false, defaultValue = "100") int limit) {
+    return ResponseEntity.ok(produitFusionService.suggest(minScore, limit));
   }
 
   @PutMapping("/cmkerp/{produitId}/code-clinique")
@@ -63,5 +84,14 @@ public class ProduitFusionRestController {
       HttpServletRequest httpRequest) {
     Long userId = AuthTokenExtractor.getCurrentUserId(httpRequest, jwtTokenProvider);
     return ResponseEntity.ok(produitFusionService.link(produitId, request.getCodeClinique(), userId));
+  }
+
+  @PostMapping("/batch-link")
+  @Operation(summary = "Valider plusieurs liaisons CODECLINIQUE en une fois")
+  public ResponseEntity<BatchLinkResultResponse> batchLink(
+      @Valid @RequestBody BatchLinkCodeCliniqueRequest request,
+      HttpServletRequest httpRequest) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(httpRequest, jwtTokenProvider);
+    return ResponseEntity.ok(produitFusionService.batchLink(request, userId));
   }
 }
