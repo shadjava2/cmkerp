@@ -40,6 +40,8 @@ public class ProduitFusionService {
 
   private static final int MATCH_ERP_MAX = 4000;
   private static final int MATCH_CLINIQUE_MAX = 12000;
+  /** Fusion CLINIQUE : uniquement pharmacie (pas labo, IT, catering, etc.). */
+  private static final String ERP_PHARMACY_CATEGORIES = "p.fkCategorie IN (2, 3)";
 
   private final JdbcTemplate jdbc;
   private final NamedParameterJdbcTemplate namedJdbc;
@@ -65,9 +67,12 @@ public class ProduitFusionService {
   @Transactional(readOnly = true)
   public FusionStatsResponse stats() {
     try {
-      Long total = jdbc.queryForObject("SELECT COUNT(*) FROM produits", Long.class);
+      Long total = jdbc.queryForObject(
+          "SELECT COUNT(*) FROM produits p WHERE " + ERP_PHARMACY_CATEGORIES,
+          Long.class);
       Long linked = jdbc.queryForObject(
-          "SELECT COUNT(*) FROM produits WHERE CODECLINIQUE IS NOT NULL AND TRIM(CODECLINIQUE) <> ''",
+          "SELECT COUNT(*) FROM produits p WHERE " + ERP_PHARMACY_CATEGORIES
+              + " AND CODECLINIQUE IS NOT NULL AND TRIM(CODECLINIQUE) <> ''",
           Long.class);
       long erpTotal = total != null ? total : 0L;
       long erpLinked = linked != null ? linked : 0L;
@@ -99,7 +104,7 @@ public class ProduitFusionService {
     int safePage = Math.max(0, page);
     int offset = safePage * safeSize;
 
-    StringBuilder where = new StringBuilder(" WHERE 1=1 ");
+    StringBuilder where = new StringBuilder(" WHERE " + ERP_PHARMACY_CATEGORIES);
     List<Object> args = new ArrayList<>();
 
     if (query != null && !query.isBlank()) {
@@ -490,8 +495,9 @@ public class ProduitFusionService {
   private Set<String> loadUsedCodeClinique() {
     try {
       List<String> codes = jdbc.query(
-          "SELECT TRIM(CODECLINIQUE) FROM produits"
-              + " WHERE CODECLINIQUE IS NOT NULL AND TRIM(CODECLINIQUE) <> ''",
+          "SELECT TRIM(p.CODECLINIQUE) FROM produits p"
+              + " WHERE " + ERP_PHARMACY_CATEGORIES
+              + " AND p.CODECLINIQUE IS NOT NULL AND TRIM(p.CODECLINIQUE) <> ''",
           (rs, i) -> rs.getString(1));
       Set<String> used = new HashSet<>();
       for (String c : codes) {
@@ -518,7 +524,8 @@ public class ProduitFusionService {
               + " LEFT JOIN dosages d ON p.fkDosage = d.id"
               + " LEFT JOIN conditionnements c ON p.fkConditionnement = c.id"
               + " LEFT JOIN categorie_produit ct ON p.fkCategorie = ct.id"
-              + " WHERE p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = ''"
+              + " WHERE " + ERP_PHARMACY_CATEGORIES
+              + " AND (p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = '')"
               + " ORDER BY p.nomcommercial ASC"
               + " LIMIT "
               + safe,
