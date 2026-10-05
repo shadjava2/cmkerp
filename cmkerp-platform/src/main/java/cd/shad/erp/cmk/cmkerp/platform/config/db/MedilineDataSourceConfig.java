@@ -19,8 +19,7 @@ import com.zaxxer.hikari.HikariDataSource;
  * Datasource Mediline / RIS (MySQL {@code production}).
  *
  * <p>Optionnelle : activée seulement si {@code cmk.datasource.mediline.url} est non vide.
- * Aucune migration Flyway. Pool séparé, {@code autoCommit=true} (pas de TX manager MySQL).
- * Ne pas JOINER avec cmkerp-v24prod.
+ * Aucune migration Flyway. Pool séparé, petit, non bloquant. Ne pas JOINER avec cmkerp-v24prod.
  */
 @Configuration
 @ConditionalOnExpression("'${cmk.datasource.mediline.url:}'.trim().length() > 0")
@@ -28,10 +27,10 @@ public class MedilineDataSourceConfig {
 
   private static final Logger log = LoggerFactory.getLogger(MedilineDataSourceConfig.class);
 
-  @Value("${platform.jdbc.mediline.fetch-size:250}")
+  @Value("${platform.jdbc.mediline.fetch-size:100}")
   private int fetchSize;
 
-  @Value("${platform.jdbc.mediline.query-timeout:30}")
+  @Value("${platform.jdbc.mediline.query-timeout:15}")
   private int queryTimeout;
 
   @Bean(name = "medilineDataSource")
@@ -41,10 +40,9 @@ public class MedilineDataSourceConfig {
       @Value("${cmk.datasource.mediline.password:}") String password,
       @Value("${cmk.datasource.mediline.driver-class-name:com.mysql.cj.jdbc.Driver}") String driver,
       @Value("${cmk.datasource.mediline.pool-name:CMK-ERP-MedilinePool}") String poolName,
-      @Value("${cmk.datasource.mediline.maximum-pool-size:10}") int maxPool,
-      @Value("${cmk.datasource.mediline.minimum-idle:2}") int minIdle,
-      @Value("${cmk.datasource.mediline.connection-timeout:30000}") long connectionTimeout,
-      @Value("${cmk.datasource.mediline.leak-detection-threshold:60000}") long leakDetection) {
+      @Value("${cmk.datasource.mediline.maximum-pool-size:5}") int maxPool,
+      @Value("${cmk.datasource.mediline.connection-timeout:8000}") long connectionTimeout,
+      @Value("${cmk.datasource.mediline.leak-detection-threshold:30000}") long leakDetection) {
 
     HikariConfig config = new HikariConfig();
     config.setJdbcUrl(url);
@@ -52,20 +50,19 @@ public class MedilineDataSourceConfig {
     config.setPassword(password);
     config.setDriverClassName(driver);
     config.setPoolName(poolName);
-    config.setMaximumPoolSize(maxPool);
-    config.setMinimumIdle(minIdle);
-    config.setConnectionTimeout(connectionTimeout);
-    config.setLeakDetectionThreshold(leakDetection);
-    config.setRegisterMbeans(false);
-    // Obligatoire : @Transactional ne couvre que la primaire cmkerp
-    config.setAutoCommit(true);
-    config.setConnectionTestQuery("SELECT 1");
-    // Ne jamais bloquer le boot si Mediline est down / mal configuré
-    config.setInitializationFailTimeout(-1);
-    config.setMinimumIdle(0);
+
+    ExternalHikariSupport.applyExternalPoolPolicy(
+        config,
+        "Mediline",
+        maxPool,
+        ExternalHikariSupport.HARD_CAP_MEDILINE,
+        connectionTimeout,
+        leakDetection,
+        false);
 
     HikariDataSource dataSource = new HikariDataSource(config);
-    log.info("Datasource Mediline initialisée (non-bloquante) -> pool={}, max={}", poolName, maxPool);
+    log.info("Datasource Mediline prête (non-bloquante) -> pool={}, max={}",
+        poolName, dataSource.getMaximumPoolSize());
     return dataSource;
   }
 

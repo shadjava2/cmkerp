@@ -20,28 +20,26 @@ cmk:
       auto-commit: false
       register-mbeans: true
       leak-detection-threshold: 60000
-    # Mediline / RIS (MySQL production) — optionnel, pas de Flyway, pas de JOIN cross-base
+    # Mediline / RIS — pool petit, minIdle forcé à 0, hard-cap 8 (voir ExternalHikariSupport)
     mediline:
       url: ${CMK_MEDILINE_DB_URL:}
       username: ${CMK_MEDILINE_DB_USER:}
       password: ${CMK_MEDILINE_DB_PASSWORD:}
       driver-class-name: com.mysql.cj.jdbc.Driver
       pool-name: CMK-ERP-MedilinePool
-      maximum-pool-size: 10
-      minimum-idle: 2
-      connection-timeout: 30000
-      leak-detection-threshold: 60000
-    # CLINIQUE (SQL Server) — optionnel, lecture seule, pas de Flyway
+      maximum-pool-size: ${CMK_MEDILINE_DB_MAX_POOL:5}
+      connection-timeout: ${CMK_MEDILINE_DB_CONN_TIMEOUT:8000}
+      leak-detection-threshold: 30000
+    # CLINIQUE SQL Server — pool très petit (Express), hard-cap 5, readOnly
     clinique:
       url: ${CMK_CLINIQUE_DB_URL:}
       username: ${CMK_CLINIQUE_DB_USER:}
       password: ${CMK_CLINIQUE_DB_PASSWORD:}
       driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
       pool-name: CMK-ERP-CliniquePool
-      maximum-pool-size: 5
-      minimum-idle: 1
-      connection-timeout: 30000
-      leak-detection-threshold: 60000
+      maximum-pool-size: ${CMK_CLINIQUE_DB_MAX_POOL:3}
+      connection-timeout: ${CMK_CLINIQUE_DB_CONN_TIMEOUT:8000}
+      leak-detection-threshold: 30000
 
 # ==========================================
 # POOL HIKARI PROD - Configuration optimisée pour haute charge
@@ -60,22 +58,17 @@ cmkerp:
       enabled: true # Activer le logger applicatif pour les requêtes lentes
       threshold-ms: 1000 # Seuil en millisecondes (requêtes > 1s seront loggées)
     pool:
-      # Ajuster selon le nombre d'instances et max_connections MySQL
-      # Formule : max-size = (max_connections MySQL / nombre_instances) - marge_sécurité
-      # Exemple : MySQL max_connections=200, 3 instances → max-size = (200/3) - 10 = ~60
-      # Exemple : MySQL max_connections=500, 5 instances → max-size = (500/5) - 20 = ~80
-      max-size: 60
-      # min-idle : environ 30-40% de max-size pour maintenir des connexions chaudes
-      min-idle: 20
-      connection-timeout-ms: 30000
-      validation-timeout-ms: 3000 # 3 secondes (optimisé pour validation rapide)
-      idle-timeout-ms: 600000 # 10 minutes
-      # Vérification automatique wait_timeout au démarrage par MySQLWaitTimeoutChecker
-      # max-lifetime doit être < wait_timeout MySQL (généralement 28800s = 8h = 28800000ms)
-      # Recommandation : max-lifetime = wait_timeout - 30 minutes (marge de sécurité)
-      # Exemple : wait_timeout=8h (28800000ms) → max-lifetime=7h30 (27000000ms)
-      max-lifetime-ms: 27000000 # 7h30 (ajuster selon wait_timeout MySQL)
-      keepalive-time-ms: 120000 # 2 minutes
+      # Primaire ERP — prudent pour ne pas saturer MySQL partagé (override via env)
+      # Formule : (max_connections MySQL / nb_instances) - marge, en laissant de la place
+      # aux clients SSMS / Mediline / autres apps sur le même serveur.
+      max-size: ${CMK_PRIMARY_DB_MAX_POOL:25}
+      min-idle: ${CMK_PRIMARY_DB_MIN_IDLE:5}
+      connection-timeout-ms: 20000
+      validation-timeout-ms: 3000
+      idle-timeout-ms: 300000 # 5 minutes — libère plus vite sous charge faible
+      # max-lifetime < wait_timeout MySQL (souvent 8h) ; 30 min recycle = connexions saines
+      max-lifetime-ms: 1800000
+      keepalive-time-ms: 60000
   async:
     # Configuration du pool de threads async (pour @Async)
     # Ajuster selon la charge et le nombre d'instances

@@ -43,8 +43,27 @@ Repositories à injecter dans les services de sync :
 - `MedilinePersonneRepository`
 - `CliniqueLookupRepository`
 
+## Pools Hikari (anti-saturation)
+
+| Pool | Défaut prod | Idle | Timeouts | Notes |
+|---|---|---|---|---|
+| **Primaire** | max 25 / minIdle 5 | recycle 5 min | conn 20s | `CMK_PRIMARY_DB_MAX_POOL`, `CMK_PRIMARY_DB_MIN_IDLE` |
+| **Mediline** | max 5 (hard-cap **8**) | **0** | conn 8s, idle 60s, lifetime 10m | boot non bloquant |
+| **CLINIQUE** | max 3 (hard-cap **5**) | **0** | idem + `readOnly=true` | SQL Express : rester bas |
+
+Politique code : `ExternalHikariSupport` (plafonds, fail-fast, `initializationFailTimeout=-1`).
+
+Overrides utiles :
+
+```env
+CMK_PRIMARY_DB_MAX_POOL=25
+CMK_PRIMARY_DB_MIN_IDLE=5
+CMK_MEDILINE_DB_MAX_POOL=5
+CMK_CLINIQUE_DB_MAX_POOL=3
+```
+
 ## Diagnostic UI / API
 
-- `GET /api/v1/datasources/status` (JWT requis) — sonde les 3 bases, toujours HTTP 200.
+- `GET /api/v1/datasources/status` (JWT requis) — sonde les 3 bases + stats pool (`active`/`idle`/`total`/`max`/`waiting`), toujours HTTP 200.
 - Accueil console (`/portail`) : panneau « Connexions bases de données ».
 - Mediline / CLINIQUE : `initializationFailTimeout=-1` → **ne bloquent jamais** le démarrage.

@@ -14,8 +14,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariPoolMXBean;
+
 /**
- * Sonde les 3 bases. Mediline / CLINIQUE absentes ou down → statut dégradé, jamais d'exception fatale.
+ * Sonde les 3 bases + métriques pool. Mediline / CLINIQUE absentes ou down → statut dégradé,
+ * jamais d'exception fatale.
  */
 @Service
 public class DatasourcesStatusService {
@@ -58,17 +62,18 @@ public class DatasourcesStatusService {
     boolean configured = url != null && !url.isBlank();
     if (!configured) {
       return new DatasourceStatus(id, label, engine, false, false, false, "Non configuré (URL vide)",
-          null, sanitizeUrl(url));
+          null, sanitizeUrl(url), null);
     }
     if (ds == null) {
       return new DatasourceStatus(id, label, engine, true, false, false,
-          "Configuré mais pool absent", null, sanitizeUrl(url));
+          "Configuré mais pool absent", null, sanitizeUrl(url), null);
     }
     return probe(id, label, engine, true, false, url, ds);
   }
 
   private DatasourceStatus probe(String id, String label, String engine, boolean configured,
       boolean required, String url, DataSource ds) {
+    PoolStats pool = readPoolStats(ds);
     long start = System.currentTimeMillis();
     try (Connection conn = ds.getConnection();
         Statement st = conn.createStatement()) {
@@ -78,7 +83,7 @@ public class DatasourcesStatusService {
       }
       long latency = System.currentTimeMillis() - start;
       return new DatasourceStatus(id, label, engine, configured, true, required, "Connecté", latency,
-          sanitizeUrl(url));
+          sanitizeUrl(url), pool);
     } catch (Exception ex) {
       long latency = System.currentTimeMillis() - start;
       String msg = ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName();
@@ -86,7 +91,34 @@ public class DatasourcesStatusService {
         msg = msg.substring(0, 240) + "…";
       }
       return new DatasourceStatus(id, label, engine, configured, false, required, msg, latency,
-          sanitizeUrl(url));
+          sanitizeUrl(url), pool);
+    }
+  }
+
+  private static PoolStats readPoolStats(DataSource ds) {
+    if (!(ds instanceof HikariDataSource hikari)) {
+      return null;
+    }
+    try {
+      HikariPoolMXBean mx = hikari.getHikariPoolMXBean();
+      if (mx == null) {
+        return new PoolStats(
+            hikari.getMaximumPoolSize(),
+            hikari.getMinimumIdle(),
+            0,
+            0,
+            0,
+            0);
+      }
+      return new PoolStats(
+          hikari.getMaximumPoolSize(),
+          hikari.getMinimumIdle(),
+          mx.getActiveConnections(),
+          mx.getIdleConnections(),
+          mx.getTotalConnections(),
+          mx.getThreadsAwaitingConnection());
+    } catch (Exception ex) {
+      return null;
     }
   }
 
@@ -102,6 +134,15 @@ public class DatasourcesStatusService {
     return safe.length() > 160 ? safe.substring(0, 160) + "…" : safe;
   }
 
+  public record PoolStats(
+      int max,
+      int minIdle,
+      int active,
+      int idle,
+      int total,
+      int waiting) {
+  }
+
   public record DatasourceStatus(
       String id,
       String label,
@@ -111,7 +152,8 @@ public class DatasourcesStatusService {
       boolean required,
       String message,
       Long latencyMs,
-      String urlHint) {
+      String urlHint,
+      PoolStats pool) {
   }
 
   public record DatasourcesStatusReport(

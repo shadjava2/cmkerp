@@ -19,8 +19,7 @@ import com.zaxxer.hikari.HikariDataSource;
  * Datasource CLINIQUE (SQL Server {@code SVR-THALIA\SQLEXPRESS} / base {@code CLINIQUE}).
  *
  * <p>Optionnelle : activée seulement si {@code cmk.datasource.clinique.url} est non vide.
- * Lecture seule (pas de DROP / UPDATE / DELETE depuis cmkerp). Aucune migration Flyway.
- * Auth SQL Server (user/password) recommandée depuis Docker Linux — pas d'authentification Windows.
+ * Lecture seule. Pool très petit (SQL Express sensible). Boot non bloquant.
  */
 @Configuration
 @ConditionalOnExpression("'${cmk.datasource.clinique.url:}'.trim().length() > 0")
@@ -28,10 +27,10 @@ public class CliniqueDataSourceConfig {
 
   private static final Logger log = LoggerFactory.getLogger(CliniqueDataSourceConfig.class);
 
-  @Value("${platform.jdbc.clinique.fetch-size:250}")
+  @Value("${platform.jdbc.clinique.fetch-size:100}")
   private int fetchSize;
 
-  @Value("${platform.jdbc.clinique.query-timeout:30}")
+  @Value("${platform.jdbc.clinique.query-timeout:15}")
   private int queryTimeout;
 
   @Bean(name = "cliniqueDataSource")
@@ -41,10 +40,9 @@ public class CliniqueDataSourceConfig {
       @Value("${cmk.datasource.clinique.password:}") String password,
       @Value("${cmk.datasource.clinique.driver-class-name:com.microsoft.sqlserver.jdbc.SQLServerDriver}") String driver,
       @Value("${cmk.datasource.clinique.pool-name:CMK-ERP-CliniquePool}") String poolName,
-      @Value("${cmk.datasource.clinique.maximum-pool-size:5}") int maxPool,
-      @Value("${cmk.datasource.clinique.minimum-idle:1}") int minIdle,
-      @Value("${cmk.datasource.clinique.connection-timeout:30000}") long connectionTimeout,
-      @Value("${cmk.datasource.clinique.leak-detection-threshold:60000}") long leakDetection) {
+      @Value("${cmk.datasource.clinique.maximum-pool-size:3}") int maxPool,
+      @Value("${cmk.datasource.clinique.connection-timeout:8000}") long connectionTimeout,
+      @Value("${cmk.datasource.clinique.leak-detection-threshold:30000}") long leakDetection) {
 
     HikariConfig config = new HikariConfig();
     config.setJdbcUrl(url);
@@ -52,22 +50,19 @@ public class CliniqueDataSourceConfig {
     config.setPassword(password);
     config.setDriverClassName(driver);
     config.setPoolName(poolName);
-    config.setMaximumPoolSize(maxPool);
-    config.setMinimumIdle(minIdle);
-    config.setConnectionTimeout(connectionTimeout);
-    config.setLeakDetectionThreshold(leakDetection);
-    config.setRegisterMbeans(false);
-    config.setAutoCommit(true);
-    // Garde-fou : jamais d'écriture vers l'appli Clinique
-    config.setReadOnly(true);
-    config.setConnectionTestQuery("SELECT 1");
-    // Ne jamais bloquer le boot si CLINIQUE est down / mal configuré
-    config.setInitializationFailTimeout(-1);
-    config.setMinimumIdle(0);
+
+    ExternalHikariSupport.applyExternalPoolPolicy(
+        config,
+        "CLINIQUE",
+        maxPool,
+        ExternalHikariSupport.HARD_CAP_CLINIQUE,
+        connectionTimeout,
+        leakDetection,
+        true);
 
     HikariDataSource dataSource = new HikariDataSource(config);
-    log.info("Datasource CLINIQUE (SQL Server) initialisée (non-bloquante, readOnly) -> pool={}, max={}",
-        poolName, maxPool);
+    log.info("Datasource CLINIQUE prête (non-bloquante, readOnly) -> pool={}, max={}",
+        poolName, dataSource.getMaximumPoolSize());
     return dataSource;
   }
 

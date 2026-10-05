@@ -17,29 +17,26 @@ cmk:
       driver-class-name: com.mysql.cj.jdbc.Driver
       pool-name: CMK-ERP-PrimaryPool
       auto-commit: false
-    # Mediline (MySQL production) — optionnel ; URL vide = stubs, démarrage OK
+    # Mediline — pool petit (hard-cap 8), minIdle=0 forcé
     mediline:
       url: ${CMK_MEDILINE_DB_URL:}
       username: ${CMK_MEDILINE_DB_USER:}
       password: ${CMK_MEDILINE_DB_PASSWORD:}
       driver-class-name: com.mysql.cj.jdbc.Driver
       pool-name: CMK-ERP-MedilinePool
-      maximum-pool-size: 5
-      minimum-idle: 1
-      connection-timeout: 30000
-      leak-detection-threshold: 60000
-    # CLINIQUE (SQL Server SVR-THALIA\SQLEXPRESS) — optionnel ; lecture seule
-    # Auth SQL Server (login/mdp) depuis Docker — pas d'authentification Windows
+      maximum-pool-size: 3
+      connection-timeout: 8000
+      leak-detection-threshold: 30000
+    # CLINIQUE — pool très petit (hard-cap 5), readOnly, minIdle=0
     clinique:
       url: ${CMK_CLINIQUE_DB_URL:}
       username: ${CMK_CLINIQUE_DB_USER:}
       password: ${CMK_CLINIQUE_DB_PASSWORD:}
       driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
       pool-name: CMK-ERP-CliniquePool
-      maximum-pool-size: 3
-      minimum-idle: 1
-      connection-timeout: 30000
-      leak-detection-threshold: 60000
+      maximum-pool-size: 2
+      connection-timeout: 8000
+      leak-detection-threshold: 30000
 
 # ==========================================
 # POOL HIKARI DEV - Configuration réduite pour développement
