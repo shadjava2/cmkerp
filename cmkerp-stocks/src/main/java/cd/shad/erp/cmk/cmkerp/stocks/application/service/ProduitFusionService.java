@@ -141,7 +141,7 @@ public class ProduitFusionService {
       clearParams.put("id", produitId);
       clearParams.put("userId", uid);
       namedJdbc.update(
-          "UPDATE produits SET CODECLINIQUE = NULL, dateupdate = NOW(), userupdatedid = :userId"
+          "UPDATE produits SET CODECLINIQUE = NULL, dateupdate = NOW(), userupdateid = :userId"
               + " WHERE CODECLINIQUE = :code AND id <> :id",
           clearParams);
     }
@@ -151,7 +151,7 @@ public class ProduitFusionService {
     params.put("code", code);
     params.put("userId", uid);
     namedJdbc.update(
-        "UPDATE produits SET CODECLINIQUE = :code, dateupdate = NOW(), userupdatedid = :userId WHERE id = :id",
+        "UPDATE produits SET CODECLINIQUE = :code, dateupdate = NOW(), userupdateid = :userId WHERE id = :id",
         params);
 
     log.info("Produit {} lié à CODECLINIQUE={}", produitId, code);
