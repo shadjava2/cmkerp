@@ -56,12 +56,15 @@ public class ProduitFusionService {
           " AND (LOWER(IFNULL(p.nomcommercial,'')) LIKE ?"
               + " OR LOWER(IFNULL(p.nomscientifique,'')) LIKE ?"
               + " OR LOWER(IFNULL(p.codebarre,'')) LIKE ?"
-              + " OR LOWER(IFNULL(p.CODECLINIQUE,'')) LIKE ?)");
+              + " OR LOWER(IFNULL(p.CODECLINIQUE,'')) LIKE ?"
+              + " OR LOWER(IFNULL(f.designation,'')) LIKE ?"
+              + " OR LOWER(IFNULL(d.designation,'')) LIKE ?"
+              + " OR LOWER(IFNULL(c.designation,'')) LIKE ?"
+              + " OR LOWER(IFNULL(ct.designation,'')) LIKE ?)");
       String like = "%" + query.trim().toLowerCase() + "%";
-      args.add(like);
-      args.add(like);
-      args.add(like);
-      args.add(like);
+      for (int i = 0; i < 8; i++) {
+        args.add(like);
+      }
     }
     if ("linked".equalsIgnoreCase(linkFilter)) {
       where.append(" AND p.CODECLINIQUE IS NOT NULL AND p.CODECLINIQUE <> ''");
@@ -69,15 +72,24 @@ public class ProduitFusionService {
       where.append(" AND (p.CODECLINIQUE IS NULL OR p.CODECLINIQUE = '')");
     }
 
+    String fromJoins =
+        " FROM produits p"
+            + " LEFT JOIN formes f ON p.fkForme = f.id"
+            + " LEFT JOIN dosages d ON p.fkDosage = d.id"
+            + " LEFT JOIN conditionnements c ON p.fkConditionnement = c.id"
+            + " LEFT JOIN categorie_produit ct ON p.fkCategorie = ct.id";
+
     try {
       Long total = jdbc.queryForObject(
-          "SELECT COUNT(*) FROM produits p" + where,
+          "SELECT COUNT(*)" + fromJoins + where,
           Long.class,
           args.toArray());
 
       String sql =
-          "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE"
-              + " FROM produits p"
+          "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE,"
+              + " f.designation AS forme, d.designation AS dosage,"
+              + " c.designation AS conditionnement, ct.designation AS categorie"
+              + fromJoins
               + where
               + " ORDER BY p.nomcommercial ASC"
               + " LIMIT "
@@ -152,8 +164,15 @@ public class ProduitFusionService {
       log.info("Produit {} lié à CODECLINIQUE={}", produitId, code);
 
       return jdbc.query(
-              "SELECT id, codebarre, nomcommercial, nomscientifique, prixachat, CODECLINIQUE"
-                  + " FROM produits WHERE id = ?",
+              "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE,"
+                  + " f.designation AS forme, d.designation AS dosage,"
+                  + " c.designation AS conditionnement, ct.designation AS categorie"
+                  + " FROM produits p"
+                  + " LEFT JOIN formes f ON p.fkForme = f.id"
+                  + " LEFT JOIN dosages d ON p.fkDosage = d.id"
+                  + " LEFT JOIN conditionnements c ON p.fkConditionnement = c.id"
+                  + " LEFT JOIN categorie_produit ct ON p.fkCategorie = ct.id"
+                  + " WHERE p.id = ?",
               this::mapErpRow,
               produitId)
           .get(0);
@@ -170,6 +189,10 @@ public class ProduitFusionService {
         .codebarre(rs.getString("codebarre"))
         .nomcommercial(rs.getString("nomcommercial"))
         .nomscientifique(rs.getString("nomscientifique"))
+        .forme(rs.getString("forme"))
+        .dosage(rs.getString("dosage"))
+        .conditionnement(rs.getString("conditionnement"))
+        .categorie(rs.getString("categorie"))
         .prixachat(rs.getBigDecimal("prixachat"))
         .codeClinique(readCodeClinique(rs))
         .build();
@@ -182,7 +205,7 @@ public class ProduitFusionService {
       try {
         return rs.getString("codeclinique");
       } catch (SQLException second) {
-        return rs.getString(6);
+        return null;
       }
     }
   }

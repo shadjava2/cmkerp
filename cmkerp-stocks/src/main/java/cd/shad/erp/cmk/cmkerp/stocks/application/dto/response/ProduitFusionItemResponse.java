@@ -16,6 +16,10 @@ public class ProduitFusionItemResponse {
   private String codebarre;
   private String nomcommercial;
   private String nomscientifique;
+  private String forme;
+  private String dosage;
+  private String conditionnement;
+  private String categorie;
   private BigDecimal prixachat;
   private String codeClinique;
 }
