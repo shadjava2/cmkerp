@@ -15,6 +15,7 @@ public class FusionSuggestionResponse {
   private String nomscientifique;
   private String forme;
   private String dosage;
+  private String conditionnement;
   private String codeClinique;
   private String designationClinique;
   private String libelleClinique;

@@ -304,6 +304,7 @@ public class ProduitFusionService {
           .nomscientifique(c.erp().getNomscientifique())
           .forme(c.erp().getForme())
           .dosage(c.erp().getDosage())
+          .conditionnement(c.erp().getConditionnement())
           .codeClinique(code)
           .designationClinique(c.cli().designation())
           .libelleClinique(c.cli().libelle())
