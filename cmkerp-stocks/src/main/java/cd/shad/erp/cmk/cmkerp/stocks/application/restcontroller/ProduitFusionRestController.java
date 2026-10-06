@@ -44,18 +44,23 @@ public class ProduitFusionRestController {
 
   @GetMapping("/stats")
   @Operation(summary = "Compteurs liés / non liés ERP + CLINIQUE")
-  public ResponseEntity<FusionStatsResponse> stats() {
-    return ResponseEntity.ok(produitFusionService.stats());
+  public ResponseEntity<FusionStatsResponse> stats(
+      @RequestParam(required = false) Long pharmacieId,
+      @RequestParam(required = false, defaultValue = "true") Boolean actif) {
+    return ResponseEntity.ok(produitFusionService.stats(pharmacieId, actif));
   }
 
   @GetMapping("/cmkerp")
-  @Operation(summary = "Liste produits CMKERP pour fusion")
+  @Operation(summary = "Liste produits CMKERP pour fusion (stock d'une pharmacie)")
   public ResponseEntity<Map<String, Object>> listCmkerp(
       @RequestParam(required = false) String q,
       @RequestParam(required = false, defaultValue = "unlinked") String linkFilter,
       @RequestParam(required = false, defaultValue = "0") int page,
-      @RequestParam(required = false, defaultValue = "50") int size) {
-    return ResponseEntity.ok(produitFusionService.listCmkerp(q, linkFilter, page, size));
+      @RequestParam(required = false, defaultValue = "50") int size,
+      @RequestParam(required = false) Long pharmacieId,
+      @RequestParam(required = false, defaultValue = "true") Boolean actif) {
+    return ResponseEntity.ok(
+        produitFusionService.listCmkerp(q, linkFilter, page, size, pharmacieId, actif));
   }
 
   @GetMapping("/clinique")
@@ -72,8 +77,10 @@ public class ProduitFusionRestController {
   @Operation(summary = "Propositions automatiques de liaison par similarité de désignation")
   public ResponseEntity<List<FusionSuggestionResponse>> suggestions(
       @RequestParam(required = false, defaultValue = "0.78") double minScore,
-      @RequestParam(required = false, defaultValue = "100") int limit) {
-    return ResponseEntity.ok(produitFusionService.suggest(minScore, limit));
+      @RequestParam(required = false, defaultValue = "100") int limit,
+      @RequestParam(required = false) Long pharmacieId,
+      @RequestParam(required = false, defaultValue = "true") Boolean actif) {
+    return ResponseEntity.ok(produitFusionService.suggest(minScore, limit, pharmacieId, actif));
   }
 
   @PutMapping("/cmkerp/{produitId}/code-clinique")

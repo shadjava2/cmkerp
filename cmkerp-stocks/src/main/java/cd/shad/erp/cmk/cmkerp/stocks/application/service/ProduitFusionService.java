@@ -65,17 +65,28 @@ public class ProduitFusionService {
   }
 
   @Transactional(readOnly = true)
-  public FusionStatsResponse stats() {
+  public FusionStatsResponse stats(Long pharmacieId, Boolean actif) {
     try {
-      Long total = jdbc.queryForObject(
-          "SELECT COUNT(*) FROM produits p WHERE " + ERP_PHARMACY_CATEGORIES,
-          Long.class);
-      Long linked = jdbc.queryForObject(
-          "SELECT COUNT(*) FROM produits p WHERE " + ERP_PHARMACY_CATEGORIES
-              + " AND CODECLINIQUE IS NOT NULL AND TRIM(CODECLINIQUE) <> ''",
-          Long.class);
-      long erpTotal = total != null ? total : 0L;
-      long erpLinked = linked != null ? linked : 0L;
+      long erpTotal = 0L;
+      long erpLinked = 0L;
+      if (pharmacieId != null) {
+        List<Object> args = new ArrayList<>();
+        StringBuilder where = new StringBuilder(" WHERE " + ERP_PHARMACY_CATEGORIES);
+        appendStockFilter(where, args, pharmacieId, actif);
+        Long total = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM produits p" + where,
+            Long.class,
+            args.toArray());
+        List<Object> linkedArgs = new ArrayList<>(args);
+        StringBuilder linkedWhere = new StringBuilder(where);
+        linkedWhere.append(" AND p.CODECLINIQUE IS NOT NULL AND TRIM(p.CODECLINIQUE) <> ''");
+        Long linked = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM produits p" + linkedWhere,
+            Long.class,
+            linkedArgs.toArray());
+        erpTotal = total != null ? total : 0L;
+        erpLinked = linked != null ? linked : 0L;
+      }
       long erpUnlinked = Math.max(0L, erpTotal - erpLinked);
 
       Set<String> used = loadUsedCodeClinique();
@@ -99,13 +110,19 @@ public class ProduitFusionService {
   }
 
   @Transactional(readOnly = true)
-  public Map<String, Object> listCmkerp(String query, String linkFilter, int page, int size) {
+  public Map<String, Object> listCmkerp(
+      String query, String linkFilter, int page, int size, Long pharmacieId, Boolean actif) {
     int safeSize = Math.max(1, Math.min(size, 100));
     int safePage = Math.max(0, page);
     int offset = safePage * safeSize;
 
+    if (pharmacieId == null) {
+      return erpPage(List.of(), 0L, safePage, safeSize);
+    }
+
     StringBuilder where = new StringBuilder(" WHERE " + ERP_PHARMACY_CATEGORIES);
     List<Object> args = new ArrayList<>();
+    appendStockFilter(where, args, pharmacieId, actif);
 
     if (query != null && !query.isBlank()) {
       where.append(
@@ -154,13 +171,7 @@ public class ProduitFusionService {
               + offset;
 
       List<ProduitFusionItemResponse> items = jdbc.query(sql, this::mapErpRow, args.toArray());
-
-      Map<String, Object> result = new HashMap<>();
-      result.put("content", items);
-      result.put("totalElements", total != null ? total : 0L);
-      result.put("page", safePage);
-      result.put("size", safeSize);
-      return result;
+      return erpPage(items, total != null ? total : 0L, safePage, safeSize);
     } catch (DataAccessException ex) {
       throw sqlFailure("listCmkerp", ex);
     }
@@ -219,15 +230,15 @@ public class ProduitFusionService {
   }
 
   @Transactional(readOnly = true)
-  public List<FusionSuggestionResponse> suggest(double minScore, int limit) {
+  public List<FusionSuggestionResponse> suggest(double minScore, int limit, Long pharmacieId, Boolean actif) {
     double threshold = Math.max(0.55, Math.min(minScore, 0.99));
     int safeLimit = Math.max(1, Math.min(limit, 300));
 
-    if (!cliniqueLookupRepository.isAvailable()) {
+    if (!cliniqueLookupRepository.isAvailable() || pharmacieId == null) {
       return List.of();
     }
 
-    List<ProduitFusionItemResponse> erpUnlinked = loadUnlinkedErp(MATCH_ERP_MAX);
+    List<ProduitFusionItemResponse> erpUnlinked = loadUnlinkedErp(MATCH_ERP_MAX, pharmacieId, actif);
     List<CliniqueProduit> cliniqueAll = loadCliniqueAll(MATCH_CLINIQUE_MAX);
     Set<String> usedCodes = loadUsedCodeClinique();
 
@@ -475,6 +486,27 @@ public class ProduitFusionService {
         .build();
   }
 
+  private Map<String, Object> erpPage(
+      List<ProduitFusionItemResponse> items, long total, int page, int size) {
+    Map<String, Object> result = new HashMap<>();
+    result.put("content", items);
+    result.put("totalElements", total);
+    result.put("page", page);
+    result.put("size", size);
+    return result;
+  }
+
+  private void appendStockFilter(StringBuilder where, List<Object> args, Long pharmacieId, Boolean actif) {
+    where.append(
+        " AND EXISTS (SELECT 1 FROM stock_produits st WHERE st.fkProduits = p.id AND st.fkPharmacies = ?");
+    args.add(pharmacieId);
+    if (actif != null) {
+      where.append(" AND st.operationnel = ?");
+      args.add(actif ? 1 : 0);
+    }
+    where.append(")");
+  }
+
   private Map<String, Object> cliniquePage(
       List<CliniqueProduit> items,
       long total,
@@ -512,8 +544,12 @@ public class ProduitFusionService {
     }
   }
 
-  private List<ProduitFusionItemResponse> loadUnlinkedErp(int max) {
+  private List<ProduitFusionItemResponse> loadUnlinkedErp(int max, Long pharmacieId, Boolean actif) {
     int safe = Math.max(1, Math.min(max, MATCH_ERP_MAX));
+    StringBuilder where = new StringBuilder(" WHERE " + ERP_PHARMACY_CATEGORIES);
+    List<Object> args = new ArrayList<>();
+    appendStockFilter(where, args, pharmacieId, actif);
+    where.append(" AND (p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = '')");
     try {
       return jdbc.query(
           "SELECT p.id, p.codebarre, p.nomcommercial, p.nomscientifique, p.prixachat, p.CODECLINIQUE,"
@@ -524,12 +560,12 @@ public class ProduitFusionService {
               + " LEFT JOIN dosages d ON p.fkDosage = d.id"
               + " LEFT JOIN conditionnements c ON p.fkConditionnement = c.id"
               + " LEFT JOIN categorie_produit ct ON p.fkCategorie = ct.id"
-              + " WHERE " + ERP_PHARMACY_CATEGORIES
-              + " AND (p.CODECLINIQUE IS NULL OR TRIM(p.CODECLINIQUE) = '')"
+              + where
               + " ORDER BY p.nomcommercial ASC"
               + " LIMIT "
               + safe,
-          this::mapErpRow);
+          this::mapErpRow,
+          args.toArray());
     } catch (DataAccessException ex) {
       throw sqlFailure("loadUnlinkedErp", ex);
     }
