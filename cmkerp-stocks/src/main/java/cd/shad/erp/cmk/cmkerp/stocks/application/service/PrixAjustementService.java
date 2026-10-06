@@ -240,7 +240,8 @@ public class PrixAjustementService {
         LEFT JOIN dosages d ON p.fkDosage = d.id
         LEFT JOIN conditionnements c ON p.fkConditionnement = c.id
         LEFT JOIN categorie_produit ct ON p.fkCategorie = ct.id
-        WHERE """
+        WHERE
+        """
             + ERP_PHARMACY_CATEGORIES
             + " AND p.CODECLINIQUE IS NOT NULL AND TRIM(p.CODECLINIQUE) <> ''");
     List<Object> args = new ArrayList<>();
