@@ -68,6 +68,12 @@ public class Produit {
     @Column(name = "prixachat", nullable = false, precision = 10, scale = 2)
     private BigDecimal prixachat;
 
+    @Column(name = "ancienprixachat", precision = 10, scale = 2)
+    private BigDecimal ancienprixachat;
+
+    @Column(name = "ancienpau", precision = 10, scale = 2)
+    private BigDecimal ancienpau;
+
     @Column(name = "prixachatcomptable", precision = 10, scale = 4)
     private BigDecimal prixachatcomptable;
 
@@ -164,6 +170,7 @@ public class Produit {
         if (nouveauPrixAchat.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("Le prix d'achat ne peut pas être négatif");
         }
+        this.ancienprixachat = this.prixachat;
         this.prixachat = nouveauPrixAchat;
         this.dateUpdate = LocalDateTime.now();
     }

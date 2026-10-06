@@ -41,7 +41,7 @@ public class PrixAjustementRestController {
   }
 
   @PostMapping("/appliquer")
-  @Operation(summary = "Copier prix ERP→PAU CLINIQUE ou PAU CLINIQUE→prix ERP")
+  @Operation(summary = "Copier prix ERP↔CLINIQUE, ou restaurer ancienprixachat / ancienpau")
   public ResponseEntity<PrixAjustementApplyResult> appliquer(
       @Valid @RequestBody PrixAjustementApplyRequest request,
       HttpServletRequest httpRequest) {

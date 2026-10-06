@@ -15,7 +15,9 @@ public class PrixAjustementApplyRequest {
     /** Copie produits.prixachat → TSTOCK.PAU */
     ERP_TO_CLINIQUE,
     /** Copie TSTOCK.PAU → produits.prixachat */
-    CLINIQUE_TO_ERP
+    CLINIQUE_TO_ERP,
+    /** Restaure ancienprixachat → prixachat et ancienpau → TSTOCK.PAU */
+    RESTORE
   }
 
   @NotNull

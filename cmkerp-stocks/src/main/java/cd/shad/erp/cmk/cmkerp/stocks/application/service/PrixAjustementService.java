@@ -109,15 +109,45 @@ public class PrixAjustementService {
         }
         String code = trim((String) row.get("code"));
         BigDecimal prixachat = (BigDecimal) row.get("prixachat");
+        BigDecimal ancienPrix = (BigDecimal) row.get("ancienprixachat");
+        BigDecimal ancienPau = (BigDecimal) row.get("ancienpau");
+        if (request.getDirection() == PrixAjustementApplyRequest.Direction.RESTORE) {
+          if (ancienPrix == null && ancienPau == null) {
+            failures.add("#" + produitId + " aucun ancien prix à restaurer");
+            continue;
+          }
+          if (ancienPrix != null) {
+            jdbc.update(
+                "UPDATE produits SET prixachat = ?, dateupdate = NOW(), userupdateid = ? WHERE id = ?",
+                ancienPrix,
+                uid,
+                produitId);
+          }
+          if (ancienPau != null) {
+            if (code == null || code.isBlank()) {
+              failures.add("#" + produitId + " ancien PAU non restauré (sans CODECLINIQUE)");
+            } else {
+              boolean ok = cliniqueLookupRepository.updatePau(code, ancienPau.doubleValue());
+              if (!ok) {
+                failures.add("#" + produitId + " ancien PAU CLINIQUE non écrit (" + code + ")");
+                continue;
+              }
+            }
+          }
+          success++;
+          continue;
+        }
         if (code == null || code.isBlank()) {
           failures.add("#" + produitId + " sans CODECLINIQUE");
           continue;
         }
+        BigDecimal pauActuel = currentPau(code);
         if (request.getDirection() == PrixAjustementApplyRequest.Direction.ERP_TO_CLINIQUE) {
           if (prixachat == null) {
             skipped++;
             continue;
           }
+          snapshotAncien(produitId, uid, prixachat, pauActuel);
           boolean ok = cliniqueLookupRepository.updatePau(code, prixachat.doubleValue());
           if (!ok) {
             failures.add("#" + produitId + " PAU CLINIQUE non écrit (" + code + ")");
@@ -125,15 +155,14 @@ public class PrixAjustementService {
           }
           success++;
         } else {
-          List<CliniquePrixInfo> infos = cliniqueLookupRepository.findPrixByCodes(List.of(code));
-          if (infos.isEmpty() || infos.get(0).pau() == null) {
+          if (pauActuel == null) {
             failures.add("#" + produitId + " PAU CLINIQUE absent (" + code + ")");
             continue;
           }
-          BigDecimal pau = BigDecimal.valueOf(infos.get(0).pau()).setScale(4, RoundingMode.HALF_UP);
+          snapshotAncien(produitId, uid, prixachat, pauActuel);
           jdbc.update(
               "UPDATE produits SET prixachat = ?, dateupdate = NOW(), userupdateid = ? WHERE id = ?",
-              pau,
+              pauActuel.setScale(4, RoundingMode.HALF_UP),
               uid,
               produitId);
           success++;
@@ -195,7 +224,27 @@ public class PrixAjustementService {
           : toDouble(ligne.get("stockErp"));
       BigDecimal incoming = toBigDecimal(ligne.get("prixLigne"));
       BigDecimal resolved = PrixAchatPolicy.resolve(current, incoming, stock);
-      if (resolved != null && (current == null || resolved.compareTo(current) != 0)) {
+      boolean erpChanges = resolved != null && (current == null || resolved.compareTo(current) != 0);
+
+      String code = trim((String) ligne.get("codeClinique"));
+      BigDecimal currentPau = null;
+      BigDecimal newPau = null;
+      if (code != null && !code.isBlank() && cliniqueLookupRepository.isAvailable()) {
+        try {
+          List<CliniquePrixInfo> infos = cliniqueLookupRepository.findPrixByCodes(List.of(code));
+          Double pau = infos.isEmpty() ? null : infos.get(0).pau();
+          double stockCli = infos.isEmpty() || infos.get(0).stock() == null ? 0d : infos.get(0).stock();
+          currentPau = pau == null ? null : BigDecimal.valueOf(pau);
+          newPau = PrixAchatPolicy.resolve(currentPau, resolved != null ? resolved : incoming, stockCli);
+        } catch (Exception ex) {
+          log.warn("syncOnApprovisionnement PAU {} : {}", code, ex.getMessage());
+        }
+      }
+      boolean pauChanges = newPau != null && (currentPau == null || newPau.compareTo(currentPau) != 0);
+      if (erpChanges || pauChanges) {
+        snapshotAncien(produitId, uid, current, currentPau);
+      }
+      if (erpChanges) {
         try {
           jdbc.update(
               "UPDATE produits SET prixachat = ?, dateupdate = NOW(), userupdateid = ? WHERE id = ?",
@@ -208,22 +257,12 @@ public class PrixAjustementService {
       }
       runningErp.put(produitId, resolved != null ? resolved : current);
       runningStock.put(produitId, stock + toDouble(ligne.get("qt")));
-
-      String code = trim((String) ligne.get("codeClinique"));
-      if (code == null || code.isBlank() || !cliniqueLookupRepository.isAvailable()) {
-        continue;
-      }
-      try {
-        List<CliniquePrixInfo> infos = cliniqueLookupRepository.findPrixByCodes(List.of(code));
-        Double pau = infos.isEmpty() ? null : infos.get(0).pau();
-        double stockCli = infos.isEmpty() || infos.get(0).stock() == null ? 0d : infos.get(0).stock();
-        BigDecimal currentPau = pau == null ? null : BigDecimal.valueOf(pau);
-        BigDecimal newPau = PrixAchatPolicy.resolve(currentPau, resolved != null ? resolved : incoming, stockCli);
-        if (newPau != null) {
+      if (pauChanges && code != null) {
+        try {
           cliniqueLookupRepository.updatePau(code, newPau.doubleValue());
+        } catch (Exception ex) {
+          log.warn("syncOnApprovisionnement PAU {} : {}", code, ex.getMessage());
         }
-      } catch (Exception ex) {
-        log.warn("syncOnApprovisionnement PAU {} : {}", code, ex.getMessage());
       }
     }
   }
@@ -231,7 +270,8 @@ public class PrixAjustementService {
   private List<PrixEcartPageResponse.PrixEcartItemResponse> loadLinkedErp(String query) {
     StringBuilder sql = new StringBuilder(
         """
-        SELECT p.id, p.nomcommercial, p.nomscientifique, p.prixachat, TRIM(p.CODECLINIQUE) AS codeClinique,
+        SELECT p.id, p.nomcommercial, p.nomscientifique, p.prixachat, p.ancienprixachat, p.ancienpau,
+               TRIM(p.CODECLINIQUE) AS codeClinique,
                f.designation AS forme, d.designation AS dosage, c.designation AS conditionnement,
                ct.designation AS categorie,
                COALESCE((SELECT SUM(sp.qte) FROM stock_produits sp WHERE sp.fkProduits = p.id), 0) AS stockErp
@@ -273,6 +313,8 @@ public class PrixAjustementService {
         .conditionnement(rs.getString("conditionnement"))
         .categorie(rs.getString("categorie"))
         .prixachat(rs.getBigDecimal("prixachat"))
+        .ancienprixachat(rs.getBigDecimal("ancienprixachat"))
+        .ancienpau(rs.getBigDecimal("ancienpau"))
         .codeClinique(trim(rs.getString("codeClinique")))
         .stockErp(rs.getDouble("stockErp"))
         .build();
@@ -280,17 +322,43 @@ public class PrixAjustementService {
 
   private Map<String, Object> loadOne(Long produitId) {
     List<Map<String, Object>> rows = jdbc.query(
-        "SELECT p.id, p.prixachat, TRIM(p.CODECLINIQUE) AS code FROM produits p WHERE p.id = ? AND "
+        "SELECT p.id, p.prixachat, p.ancienprixachat, p.ancienpau, TRIM(p.CODECLINIQUE) AS code FROM produits p WHERE p.id = ? AND "
             + ERP_PHARMACY_CATEGORIES,
         (rs, i) -> {
           Map<String, Object> m = new HashMap<>();
           m.put("id", rs.getLong("id"));
           m.put("prixachat", rs.getBigDecimal("prixachat"));
+          m.put("ancienprixachat", rs.getBigDecimal("ancienprixachat"));
+          m.put("ancienpau", rs.getBigDecimal("ancienpau"));
           m.put("code", rs.getString("code"));
           return m;
         },
         produitId);
     return rows.isEmpty() ? null : rows.get(0);
+  }
+
+  private void snapshotAncien(Long produitId, long uid, BigDecimal prixErp, BigDecimal pau) {
+    jdbc.update(
+        """
+        UPDATE produits
+        SET ancienprixachat = COALESCE(?, ancienprixachat),
+            ancienpau = COALESCE(?, ancienpau),
+            dateupdate = NOW(),
+            userupdateid = ?
+        WHERE id = ?
+        """,
+        prixErp,
+        pau,
+        uid,
+        produitId);
+  }
+
+  private BigDecimal currentPau(String code) {
+    List<CliniquePrixInfo> infos = cliniqueLookupRepository.findPrixByCodes(List.of(code));
+    if (infos.isEmpty() || infos.get(0).pau() == null) {
+      return null;
+    }
+    return BigDecimal.valueOf(infos.get(0).pau()).setScale(4, RoundingMode.HALF_UP);
   }
 
   private static String trim(String v) {

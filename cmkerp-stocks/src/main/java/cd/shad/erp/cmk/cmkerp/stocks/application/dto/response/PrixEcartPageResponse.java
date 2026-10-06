@@ -36,6 +36,8 @@ public class PrixEcartPageResponse {
     private String conditionnement;
     private String categorie;
     private BigDecimal prixachat;
+    private BigDecimal ancienprixachat;
+    private BigDecimal ancienpau;
     private String codeClinique;
     private String designationClinique;
     private Double pau;
