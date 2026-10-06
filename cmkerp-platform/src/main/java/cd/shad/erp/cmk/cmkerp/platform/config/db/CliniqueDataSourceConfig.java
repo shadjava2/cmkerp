@@ -19,7 +19,7 @@ import com.zaxxer.hikari.HikariDataSource;
  * Datasource CLINIQUE (SQL Server {@code SVR-THALIA\SQLEXPRESS} / base {@code CLINIQUE}).
  *
  * <p>Optionnelle : activée seulement si {@code cmk.datasource.clinique.url} est non vide.
- * Lecture seule. Pool très petit (SQL Express sensible). Boot non bloquant.
+ * Lecture + UPDATE ciblé de {@code TSTOCK.PAU} uniquement. Pas de DROP / DELETE / DDL.
  */
 @Configuration
 @ConditionalOnExpression("'${cmk.datasource.clinique.url:}'.trim().length() > 0")
@@ -58,10 +58,10 @@ public class CliniqueDataSourceConfig {
         ExternalHikariSupport.HARD_CAP_CLINIQUE,
         connectionTimeout,
         leakDetection,
-        true);
+        false);
 
     HikariDataSource dataSource = new HikariDataSource(config);
-    log.info("Datasource CLINIQUE prête (non-bloquante, readOnly) -> pool={}, max={}",
+    log.info("Datasource CLINIQUE prête (non-bloquante, PAU update autorisé) -> pool={}, max={}",
         poolName, dataSource.getMaximumPoolSize());
     return dataSource;
   }

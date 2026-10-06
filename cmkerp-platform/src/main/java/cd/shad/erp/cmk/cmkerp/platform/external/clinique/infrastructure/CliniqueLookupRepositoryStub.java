@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueLookupRepository;
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniquePrixInfo;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueProduit;
 
 /**
@@ -40,5 +41,15 @@ public class CliniqueLookupRepositoryStub implements CliniqueLookupRepository {
   @Override
   public long countProduits(String query) {
     return 0L;
+  }
+
+  @Override
+  public List<CliniquePrixInfo> findPrixByCodes(List<String> codes) {
+    return Collections.emptyList();
+  }
+
+  @Override
+  public boolean updatePau(String code, double pau) {
+    return false;
   }
 }

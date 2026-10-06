@@ -1,5 +1,6 @@
 package cd.shad.erp.cmk.cmkerp.platform.external.clinique.infrastructure;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -14,10 +15,11 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueLookupRepository;
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniquePrixInfo;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueProduit;
 
 /**
- * JDBC CLINIQUE — SELECT uniquement. Jamais d'UPDATE / DELETE / DROP / DDL.
+ * JDBC CLINIQUE — SELECT + UPDATE ciblé de {@code TSTOCK.PAU}. Jamais de DELETE / DROP / DDL.
  */
 @Repository
 @ConditionalOnBean(name = "cliniqueDataSource")
@@ -42,6 +44,34 @@ public class CliniqueLookupJdbcRepository implements CliniqueLookupRepository {
         trim(rs.getString("DOSAGE")),
         trim(rs.getString("DESIGNATION")),
         pau);
+  };
+
+  private static final RowMapper<CliniquePrixInfo> PRIX_MAPPER = (rs, rowNum) -> {
+    Double pau = null;
+    Double stock = null;
+    try {
+      double v = rs.getDouble("PAU");
+      if (!rs.wasNull()) {
+        pau = v;
+      }
+    } catch (Exception ignored) {
+      // ignore
+    }
+    try {
+      double v = rs.getDouble("STINV");
+      if (!rs.wasNull()) {
+        stock = v;
+      }
+    } catch (Exception ignored) {
+      // ignore
+    }
+    return new CliniquePrixInfo(
+        trim(rs.getString("CODE")),
+        trim(rs.getString("DESIGNATION")),
+        trim(rs.getString("FORME")),
+        trim(rs.getString("DOSAGE")),
+        pau,
+        stock);
   };
 
   private static String trim(String value) {
@@ -222,6 +252,67 @@ public class CliniqueLookupJdbcRepository implements CliniqueLookupRepository {
       } catch (DataAccessException ex2) {
         return 0L;
       }
+    }
+  }
+
+  @Override
+  public List<CliniquePrixInfo> findPrixByCodes(List<String> codes) {
+    if (codes == null || codes.isEmpty()) {
+      return List.of();
+    }
+    List<CliniquePrixInfo> out = new ArrayList<>();
+    final int chunkSize = 80;
+    for (int i = 0; i < codes.size(); i += chunkSize) {
+      List<String> chunk = codes.subList(i, Math.min(i + chunkSize, codes.size())).stream()
+          .filter(c -> c != null && !c.isBlank())
+          .map(String::trim)
+          .distinct()
+          .toList();
+      if (chunk.isEmpty()) {
+        continue;
+      }
+      String placeholders = String.join(",", Collections.nCopies(chunk.size(), "?"));
+      try {
+        out.addAll(jdbcTemplate.query(
+            """
+            SELECT p.CODE, p.DESIGNATION, p.FORME, p.DOSAGE, s.PAU, s.STINV
+            FROM dbo.TPRODUIT p
+            LEFT JOIN dbo.TSTOCK s ON RTRIM(s.CODE) = RTRIM(p.CODE)
+            WHERE RTRIM(p.CODE) IN ("""
+                + placeholders
+                + ")",
+            PRIX_MAPPER,
+            chunk.toArray()));
+      } catch (DataAccessException ex) {
+        log.warn("findPrixByCodes CLINIQUE: {}", ex.getMessage());
+      }
+    }
+    return out;
+  }
+
+  @Override
+  public boolean updatePau(String code, double pau) {
+    if (code == null || code.isBlank()) {
+      return false;
+    }
+    String trimmed = code.trim();
+    try {
+      int updated = jdbcTemplate.update(
+          "UPDATE dbo.TSTOCK SET PAU = ? WHERE RTRIM(CODE) = ?",
+          pau,
+          trimmed);
+      if (updated > 0) {
+        return true;
+      }
+      String padded = trimmed.length() >= 10 ? trimmed.substring(0, 10) : String.format("%-10s", trimmed);
+      int inserted = jdbcTemplate.update(
+          "INSERT INTO dbo.TSTOCK (CODE, PAU) VALUES (?, ?)",
+          padded,
+          pau);
+      return inserted > 0;
+    } catch (DataAccessException ex) {
+      log.warn("updatePau CLINIQUE code={}: {}", trimmed, ex.getMessage());
+      return false;
     }
   }
 

@@ -12,6 +12,7 @@ import cd.shad.erp.cmk.cmkerp.stocks.autorisations.application.dto.response.Auto
 import cd.shad.erp.cmk.cmkerp.stocks.autorisations.application.service.AutorisationOperationCommandService;
 import cd.shad.erp.cmk.cmkerp.stocks.autorisations.domain.model.AutorisationOperation;
 import cd.shad.erp.cmk.cmkerp.stocks.autorisations.application.service.AutorisationOperationQueryService;
+import cd.shad.erp.cmk.cmkerp.stocks.application.service.PrixAjustementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class ApprovisionnementCommandService {
     private final AutorisationOperationCommandService autorisationOperationCommandService;
     private final AutorisationOperationQueryService autorisationOperationQueryService;
     private final JdbcTemplate jdbcTemplate;
+    private final PrixAjustementService prixAjustementService;
 
     public ApprovisionnementCommandService(
             ApprovisionnementRepository approvisionnementRepository,
@@ -43,13 +45,15 @@ public class ApprovisionnementCommandService {
             ApprovisionnementMapper approvisionnementMapper,
             @Lazy AutorisationOperationCommandService autorisationOperationCommandService,
             AutorisationOperationQueryService autorisationOperationQueryService,
-            JdbcTemplate jdbcTemplate) {
+            JdbcTemplate jdbcTemplate,
+            PrixAjustementService prixAjustementService) {
         this.approvisionnementRepository = approvisionnementRepository;
         this.ligneApprovRepository = ligneApprovRepository;
         this.approvisionnementMapper = approvisionnementMapper;
         this.autorisationOperationCommandService = autorisationOperationCommandService;
         this.autorisationOperationQueryService = autorisationOperationQueryService;
         this.jdbcTemplate = jdbcTemplate;
+        this.prixAjustementService = prixAjustementService;
     }
 
     /**
@@ -187,6 +191,13 @@ public class ApprovisionnementCommandService {
         if (ligneApprovRepository.findByFkApprov(id).isEmpty()) {
             throw new BusinessException(
                     "Impossible de valider : au moins une ligne d'approvisionnement est requise");
+        }
+
+        // Prix ERP + PAU CLINIQUE avant le trigger stock (stock encore = existant)
+        try {
+            prixAjustementService.syncOnApprovisionnement(id, currentUserId);
+        } catch (Exception ex) {
+            log.warn("Sync prix CLINIQUE à la validation du bon {}: {}", id, ex.getMessage());
         }
 
         approvisionnement.valider(currentUserId);
