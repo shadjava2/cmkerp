@@ -232,6 +232,15 @@ public final class ApiPaths {
   public static final String STOCKS_BASE = API_V1 + "/stocks";
 
   /**
+   * Journal d'utilisation console (navigation / clics).
+   * <ul>
+   * <li>POST /api/v1/usage-events</li>
+   * <li>GET /api/v1/usage-events</li>
+   * </ul>
+   */
+  public static final String USAGE_EVENTS_BASE = API_V1 + "/usage-events";
+
+  /**
    * Base pour les endpoints du module Approvisionnements.
    * <p>
    * Exemples :
