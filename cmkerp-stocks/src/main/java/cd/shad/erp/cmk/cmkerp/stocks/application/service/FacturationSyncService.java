@@ -12,6 +12,7 @@ import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniquePrixInfo;
@@ -40,9 +41,17 @@ public class FacturationSyncService {
       @Autowired(required = false) @Qualifier("cliniqueBeachProduitSupport")
           SqlServerProduitJdbcSupport beachSupport,
       @Autowired(required = false) @Qualifier("cliniqueChProduitSupport")
-          SqlServerProduitJdbcSupport chSupport) {
-    this.beachSupport = beachSupport;
-    this.chSupport = chSupport;
+          SqlServerProduitJdbcSupport chSupport,
+      @Autowired(required = false) @Qualifier("cliniqueJdbcTemplate") JdbcTemplate beachJdbc,
+      @Autowired(required = false) @Qualifier("cliniqueChJdbcTemplate") JdbcTemplate chJdbc) {
+    this.beachSupport =
+        beachSupport != null
+            ? beachSupport
+            : (beachJdbc != null ? new SqlServerProduitJdbcSupport(beachJdbc, "CLINIQUE-BEACH") : null);
+    this.chSupport =
+        chSupport != null
+            ? chSupport
+            : (chJdbc != null ? new SqlServerProduitJdbcSupport(chJdbc, "CLINIQUE-CH") : null);
   }
 
   public FacturationSyncCompareResponse compare(String query) {
@@ -50,6 +59,12 @@ public class FacturationSyncService {
     SqlServerProduitJdbcSupport ch = chSupport;
     boolean beachOk = beach != null && beach.isAvailable();
     boolean chOk = ch != null && ch.isAvailable();
+    if (beach == null) {
+      log.warn("Sync facturation: support Beach absent (bean cliniqueBeachProduitSupport / cliniqueJdbcTemplate)");
+    }
+    if (ch == null) {
+      log.warn("Sync facturation: support CH absent (bean cliniqueChProduitSupport / cliniqueChJdbcTemplate)");
+    }
 
     if (!beachOk || !chOk) {
       return FacturationSyncCompareResponse.builder()

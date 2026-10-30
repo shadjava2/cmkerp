@@ -15,8 +15,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.infrastructure.SqlServerProduitJdbcSupport;
+
 /**
- * Datasource CLINIQUE (SQL Server {@code SVR-THALIA\SQLEXPRESS} / base {@code CLINIQUE}).
+ * Datasource CLINIQUE Beach (SQL Server / base {@code CLINIQUE}).
  *
  * <p>Optionnelle : activée seulement si {@code cmk.datasource.clinique.url} est non vide.
  * Lecture + UPDATE ciblé de {@code TSTOCK.PAU} uniquement. Pas de DROP / DELETE / DDL.
@@ -78,5 +80,12 @@ public class CliniqueDataSourceConfig {
   public NamedParameterJdbcTemplate cliniqueNamedParameterJdbcTemplate(
       @Qualifier("cliniqueJdbcTemplate") JdbcTemplate jdbcTemplate) {
     return new NamedParameterJdbcTemplate(jdbcTemplate);
+  }
+
+  /** Support TPRODUIT/TSTOCK Beach — créé ici (évite {@code @ConditionalOnBean} trop tôt). */
+  @Bean(name = "cliniqueBeachProduitSupport")
+  public SqlServerProduitJdbcSupport cliniqueBeachProduitSupport(
+      @Qualifier("cliniqueJdbcTemplate") JdbcTemplate jdbcTemplate) {
+    return new SqlServerProduitJdbcSupport(jdbcTemplate, "CLINIQUE-BEACH");
   }
 }
