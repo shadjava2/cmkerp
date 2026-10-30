@@ -13,7 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Diagnostic des 3 bases. Toujours HTTP 200 : Mediline / CLINIQUE down n'est pas une panne API.
+ * Diagnostic des bases (ERP, Mediline, Beach, CH). Toujours HTTP 200 : externes down ≠ panne API.
  */
 @RestController
 @RequiredArgsConstructor

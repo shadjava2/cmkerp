@@ -27,13 +27,23 @@ cmk:
       maximum-pool-size: 3
       connection-timeout: 8000
       leak-detection-threshold: 30000
-    # CLINIQUE — pool très petit (hard-cap 5), readOnly, minIdle=0
+    # CLINIQUE Beach — pool très petit (hard-cap 5), minIdle=0
     clinique:
       url: ${CMK_CLINIQUE_DB_URL:}
       username: ${CMK_CLINIQUE_DB_USER:}
       password: ${CMK_CLINIQUE_DB_PASSWORD:}
       driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
       pool-name: CMK-ERP-CliniquePool
+      maximum-pool-size: 2
+      connection-timeout: 8000
+      leak-detection-threshold: 30000
+    # CLINIQUE CH (2e serveur facturation 192.168.1.228) — même schéma
+    clinique-ch:
+      url: ${CMK_CLINIQUE_CH_DB_URL:}
+      username: ${CMK_CLINIQUE_CH_DB_USER:}
+      password: ${CMK_CLINIQUE_CH_DB_PASSWORD:}
+      driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
+      pool-name: CMK-ERP-CliniqueChPool
       maximum-pool-size: 2
       connection-timeout: 8000
       leak-detection-threshold: 30000

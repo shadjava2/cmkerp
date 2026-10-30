@@ -18,8 +18,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 
 /**
- * Sonde les 3 bases + métriques pool. Mediline / CLINIQUE absentes ou down → statut dégradé,
- * jamais d'exception fatale.
+ * Sonde les bases + métriques pool. Mediline / CLINIQUE / CLINIQUE-CH absentes ou down →
+ * statut dégradé, jamais d'exception fatale.
  */
 @Service
 public class DatasourcesStatusService {
@@ -27,6 +27,7 @@ public class DatasourcesStatusService {
   private final DataSource primaryDataSource;
   private final ObjectProvider<DataSource> medilineDataSource;
   private final ObjectProvider<DataSource> cliniqueDataSource;
+  private final ObjectProvider<DataSource> cliniqueChDataSource;
 
   @Value("${cmk.datasource.mediline.url:}")
   private String medilineUrl;
@@ -34,26 +35,33 @@ public class DatasourcesStatusService {
   @Value("${cmk.datasource.clinique.url:}")
   private String cliniqueUrl;
 
+  @Value("${cmk.datasource.clinique-ch.url:}")
+  private String cliniqueChUrl;
+
   @Value("${cmk.datasource.primary.url:}")
   private String primaryUrl;
 
   public DatasourcesStatusService(
       @Qualifier("primaryDataSource") DataSource primaryDataSource,
       @Qualifier("medilineDataSource") ObjectProvider<DataSource> medilineDataSource,
-      @Qualifier("cliniqueDataSource") ObjectProvider<DataSource> cliniqueDataSource) {
+      @Qualifier("cliniqueDataSource") ObjectProvider<DataSource> cliniqueDataSource,
+      @Qualifier("cliniqueChDataSource") ObjectProvider<DataSource> cliniqueChDataSource) {
     this.primaryDataSource = primaryDataSource;
     this.medilineDataSource = medilineDataSource;
     this.cliniqueDataSource = cliniqueDataSource;
+    this.cliniqueChDataSource = cliniqueChDataSource;
   }
 
   public DatasourcesStatusReport checkAll() {
-    List<DatasourceStatus> items = new ArrayList<>(3);
+    List<DatasourceStatus> items = new ArrayList<>(4);
     items.add(probe("primary", "cmkerp-v24prod (ERP)", "MySQL", true, true, primaryUrl,
         primaryDataSource));
     items.add(probeOptional("mediline", "Mediline (production)", "MySQL", medilineUrl,
         medilineDataSource.getIfAvailable()));
-    items.add(probeOptional("clinique", "CLINIQUE (SQL Server)", "SQL Server", cliniqueUrl,
+    items.add(probeOptional("clinique", "CLINIQUE Beach (SQL Server)", "SQL Server", cliniqueUrl,
         cliniqueDataSource.getIfAvailable()));
+    items.add(probeOptional("clinique-ch", "CLINIQUE CH (SQL Server)", "SQL Server", cliniqueChUrl,
+        cliniqueChDataSource.getIfAvailable()));
     return new DatasourcesStatusReport(Instant.now().toString(), false, items);
   }
 

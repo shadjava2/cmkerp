@@ -21,10 +21,14 @@ public class ExternalDataSourceStartupLogger {
   @Value("${cmk.datasource.clinique.url:}")
   private String cliniqueUrl;
 
+  @Value("${cmk.datasource.clinique-ch.url:}")
+  private String cliniqueChUrl;
+
   @EventListener(ApplicationReadyEvent.class)
   public void logExternalDatasources() {
     logDatasource("Mediline (MySQL production)", medilineUrl);
-    logDatasource("CLINIQUE (SQL Server)", cliniqueUrl);
+    logDatasource("CLINIQUE Beach (SQL Server)", cliniqueUrl);
+    logDatasource("CLINIQUE CH (SQL Server)", cliniqueChUrl);
   }
 
   private static void logDatasource(String label, String url) {

@@ -15,6 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.application.CliniquePauDualWriteService;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniqueLookupRepository;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.domain.CliniquePrixInfo;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.BusinessException;
@@ -24,7 +25,8 @@ import cd.shad.erp.cmk.cmkerp.stocks.application.dto.response.PrixEcartPageRespo
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Comparaison / alignement prixachat ERP ↔ PAU CLINIQUE (catégories pharmacie 2 et 3).
+ * Comparaison / alignement prixachat ERP ↔ PAU CLINIQUE Beach (cat. 2 et 3).
+ * Les écritures PAU partent aussi vers CH si le 2e serveur est configuré.
  */
 @Service
 @Slf4j
@@ -35,12 +37,15 @@ public class PrixAjustementService {
 
   private final JdbcTemplate jdbc;
   private final CliniqueLookupRepository cliniqueLookupRepository;
+  private final CliniquePauDualWriteService pauDualWrite;
 
   public PrixAjustementService(
       @Qualifier("primaryJdbcTemplate") JdbcTemplate jdbc,
-      CliniqueLookupRepository cliniqueLookupRepository) {
+      CliniqueLookupRepository cliniqueLookupRepository,
+      CliniquePauDualWriteService pauDualWrite) {
     this.jdbc = jdbc;
     this.cliniqueLookupRepository = cliniqueLookupRepository;
+    this.pauDualWrite = pauDualWrite;
   }
 
   @Transactional(readOnly = true)
@@ -127,10 +132,13 @@ public class PrixAjustementService {
             if (code == null || code.isBlank()) {
               failures.add("#" + produitId + " ancien PAU non restauré (sans CODECLINIQUE)");
             } else {
-              boolean ok = cliniqueLookupRepository.updatePau(code, ancienPau.doubleValue());
-              if (!ok) {
-                failures.add("#" + produitId + " ancien PAU CLINIQUE non écrit (" + code + ")");
+              var dual = pauDualWrite.updatePau(code, ancienPau.doubleValue());
+              if (!dual.beachSucceeded()) {
+                failures.add("#" + produitId + " ancien PAU Beach non écrit (" + code + ")");
                 continue;
+              }
+              if (!dual.chSucceededOrSkipped()) {
+                failures.add("#" + produitId + " ancien PAU CH non écrit (" + code + ")");
               }
             }
           }
@@ -148,10 +156,13 @@ public class PrixAjustementService {
             continue;
           }
           snapshotAncien(produitId, uid, prixachat, pauActuel);
-          boolean ok = cliniqueLookupRepository.updatePau(code, prixachat.doubleValue());
-          if (!ok) {
-            failures.add("#" + produitId + " PAU CLINIQUE non écrit (" + code + ")");
+          var dual = pauDualWrite.updatePau(code, prixachat.doubleValue());
+          if (!dual.beachSucceeded()) {
+            failures.add("#" + produitId + " PAU Beach non écrit (" + code + ")");
             continue;
+          }
+          if (!dual.chSucceededOrSkipped()) {
+            failures.add("#" + produitId + " PAU CH non écrit (" + code + ")");
           }
           success++;
         } else {
@@ -259,7 +270,10 @@ public class PrixAjustementService {
       runningStock.put(produitId, stock + toDouble(ligne.get("qt")));
       if (pauChanges && code != null) {
         try {
-          cliniqueLookupRepository.updatePau(code, newPau.doubleValue());
+          var dual = pauDualWrite.updatePau(code, newPau.doubleValue());
+          if (!dual.chSucceededOrSkipped()) {
+            log.warn("syncOnApprovisionnement PAU CH {} échoué", code);
+          }
         } catch (Exception ex) {
           log.warn("syncOnApprovisionnement PAU {} : {}", code, ex.getMessage());
         }
