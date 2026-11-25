@@ -26,10 +26,19 @@ public class PermissionJdbcRepositoryImpl extends AbstractJdbcRepository impleme
         super(jdbcTemplate, namedJdbcTemplate);
     }
 
-    private static final RowMapper<Permission> PERMISSION_MAPPER = (rs, rowNum) -> Permission.builder()
+    private static final RowMapper<Permission> PERMISSION_MAPPER = (rs, rowNum) -> {
+        Long parent = null;
+        try {
+            long raw = rs.getLong("parent");
+            parent = rs.wasNull() ? 0L : raw;
+        } catch (Exception ignored) {
+            parent = 0L;
+        }
+        return Permission.builder()
             .id(rs.getLong("id"))
             .nom(rs.getString("nom"))
             .description(rs.getString("description"))
+            .parent(parent)
             .dateCreate(rs.getTimestamp("datecreate") != null
                 ? rs.getTimestamp("datecreate").toLocalDateTime()
                 : null)
@@ -39,30 +48,24 @@ public class PermissionJdbcRepositoryImpl extends AbstractJdbcRepository impleme
             .userCreatedId(rs.getLong("usercreateid"))
             .userUpdatedId(rs.getLong("userupdateid"))
             .build();
+    };
+
+    private static final String PROJECTION =
+            "SELECT id, nom, description, parent, datecreate, dateupdate, usercreateid, userupdateid FROM permissions";
 
     @Override
     public Optional<Permission> findById(Long id) {
-        // Facebook-Grade: Projection explicite pour éviter SELECT * (meilleure performance)
-        String sql = "SELECT id, nom, description, datecreate, dateupdate, usercreateid, userupdateid " +
-                "FROM permissions WHERE id = ?";
-        return queryForOptional(sql, PERMISSION_MAPPER, id);
+        return queryForOptional(PROJECTION + " WHERE id = ?", PERMISSION_MAPPER, id);
     }
 
     @Override
     public Optional<Permission> findByNom(String nom) {
-        // Facebook-Grade: Utilise l'index UNIQUE sur nom (uniquepermission) pour performance optimale
-        // Projection explicite pour éviter SELECT * (meilleure performance)
-        String sql = "SELECT id, nom, description, datecreate, dateupdate, usercreateid, userupdateid " +
-                "FROM permissions WHERE nom = ? LIMIT 1";
-        return queryForOptional(sql, PERMISSION_MAPPER, nom);
+        return queryForOptional(PROJECTION + " WHERE nom = ? LIMIT 1", PERMISSION_MAPPER, nom);
     }
 
     @Override
     public List<Permission> findAll() {
-        // Facebook-Grade: Projection explicite + ORDER BY id utilise l'index primaire (clustered index)
-        String sql = "SELECT id, nom, description, datecreate, dateupdate, usercreateid, userupdateid " +
-                "FROM permissions ORDER BY id";
-        return queryForList(sql, PERMISSION_MAPPER);
+        return queryForList(PROJECTION + " ORDER BY parent ASC, id ASC", PERMISSION_MAPPER);
     }
 }
 

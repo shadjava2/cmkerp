@@ -39,8 +39,7 @@ import lombok.RequiredArgsConstructor;
  */
 @Configuration
 @EnableWebSecurity
-// ✅ SECURITY SCOPE REDUCTION: @EnableMethodSecurity désactivé - AUTH uniquement (pas de RBAC/ACL)
-// @EnableMethodSecurity
+@org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -51,6 +50,7 @@ public class SecurityConfig {
   private boolean allowCredentials;
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
+  private final RbacEnforcementFilter rbacEnforcementFilter;
 
   /**
    * Configuration de la chaîne de filtres de sécurité.
@@ -124,9 +124,9 @@ public class SecurityConfig {
             .requestMatchers("/actuator/**").authenticated()
             // Tout le reste nécessite une authentification
             .anyRequest().authenticated())
-        // Ajouter le filtre JWT avant UsernamePasswordAuthenticationFilter
-        // Note: Le RateLimitFilter est ajouté via @Order(1) dans la classe du filtre
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        // JWT puis enforcement RBAC live (DB/cache) — les claims JWT ne font pas autorité seule
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(rbacEnforcementFilter, JwtAuthenticationFilter.class);
 
     return http.build();
   }

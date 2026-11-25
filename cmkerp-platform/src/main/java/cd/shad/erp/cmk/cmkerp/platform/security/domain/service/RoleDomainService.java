@@ -6,6 +6,7 @@ import cd.shad.erp.cmk.cmkerp.platform.security.domain.repository.RolePermission
 import cd.shad.erp.cmk.cmkerp.platform.security.domain.repository.RoleRepository;
 import cd.shad.erp.cmk.cmkerp.platform.security.domain.repository.UtilisateurRepository;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.BusinessException;
+import cd.shad.erp.cmk.cmkerp.sharedkernel.security.SystemRoleConstants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,11 @@ public class RoleDomainService {
     public void validerNomUnique(String nom, Long roleIdExclu) {
         Role.validerNom(nom);
 
+        if (SystemRoleConstants.isAdminRoleName(nom)
+            && (roleIdExclu == null || !SystemRoleConstants.isAdminRoleId(roleIdExclu))) {
+            throw new BusinessException("Le nom ADMIN est réservé au rôle système protégé");
+        }
+
         roleRepository.findByNom(nom.trim())
             .ifPresent(existingRole -> {
                 if (roleIdExclu == null || !existingRole.getId().equals(roleIdExclu)) {
@@ -31,10 +37,19 @@ public class RoleDomainService {
             });
     }
 
+    public void validerRoleNonSysteme(Long roleId) {
+        if (SystemRoleConstants.isAdminRoleId(roleId)) {
+            throw new BusinessException(
+                "Le rôle système ADMIN est protégé et ne peut pas être modifié depuis l'application");
+        }
+    }
+
     public void validerSuppressionRole(Long roleId) {
         if (roleId == null) {
             throw new IllegalArgumentException("L'ID du rôle ne peut pas être null");
         }
+
+        validerRoleNonSysteme(roleId);
 
         if (utilisateurRepository.existsByFkRole(roleId)) {
             throw new BusinessException("Impossible de supprimer ce rôle car il est utilisé par au moins un utilisateur");

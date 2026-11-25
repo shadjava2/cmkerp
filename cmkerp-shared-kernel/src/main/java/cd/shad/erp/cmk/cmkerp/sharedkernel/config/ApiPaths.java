@@ -121,6 +121,11 @@ public final class ApiPaths {
   public static final String PERMISSIONS_BASE = API_V1 + "/permissions";
 
   /**
+   * Base pour les endpoints d'administration RBAC (intégrité ADMIN, etc.).
+   */
+  public static final String RBAC_BASE = API_V1 + "/rbac";
+
+  /**
    * Base pour les endpoints de gestion des sites.
    * <p>
    * Exemples :
@@ -567,6 +572,21 @@ public final class ApiPaths {
   public static final String GMAO_INVENTAIRES_BASE = GMAO_BASE + "/inventaires";
 
   public static final String GMAO_PATTERN = GMAO_BASE + "/**";
+
+  /**
+   * Base pour le moteur de consultation clinique (ambulatoire Lot 1).
+   * <p>
+   * Exemples :
+   * <ul>
+   * <li>GET /api/v1/consultations/phases?typeHospi=AMBULATOIRE</li>
+   * <li>POST /api/v1/consultations</li>
+   * <li>GET /api/v1/consultations/{id}</li>
+   * <li>GET /api/v1/consultations/active?fiche=…</li>
+   * </ul>
+   */
+  public static final String CONSULTATIONS_BASE = API_V1 + "/consultations";
+
+  public static final String CONSULTATIONS_PATTERN = CONSULTATIONS_BASE + "/**";
 
   /**
    * Base pour les endpoints d'analyse et d'administration.

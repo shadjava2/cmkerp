@@ -44,6 +44,11 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
+      - name: RBAC compliance check (blocking)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep || true
+          bash scripts/rbac-compliance-check.sh
+
       - name: Build with Maven
         run: mvn clean verify -DskipTests=false
         env:

@@ -11,6 +11,7 @@ import cd.shad.erp.cmk.cmkerp.platform.security.domain.repository.RoleRepository
 import cd.shad.erp.cmk.cmkerp.platform.security.domain.repository.UtilisateurRepository;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.BusinessException;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.exception.NotFoundException;
+import cd.shad.erp.cmk.cmkerp.sharedkernel.security.SystemRoleConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -61,6 +62,7 @@ public class UtilisateurCommandService {
         if (request.getFkRole() != null) {
             roleRepository.findById(request.getFkRole())
                     .orElseThrow(() -> NotFoundException.entity("Role", request.getFkRole()));
+            preventUnauthorizedAdminElevation(request.getFkRole(), currentUserId);
         }
 
         // Convertir le DTO en entité
@@ -124,6 +126,7 @@ public class UtilisateurCommandService {
         if (request.getFkRole() != null && !request.getFkRole().equals(utilisateur.getFkRole())) {
             roleRepository.findById(request.getFkRole())
                     .orElseThrow(() -> NotFoundException.entity("Role", request.getFkRole()));
+            preventUnauthorizedAdminElevation(request.getFkRole(), currentUserId);
         }
 
         // Mettre à jour l'entité
@@ -298,6 +301,29 @@ public class UtilisateurCommandService {
                     "Impossible de supprimer cet utilisateur car il est référencé dans d'autres données. " +
                     "Veuillez supprimer les références avant de supprimer l'utilisateur."
             );
+        }
+    }
+
+    /**
+     * Empêche l'élévation de privilèges : seul un utilisateur déjà ADMIN
+     * peut attribuer le rôle système ADMIN.
+     */
+    private void preventUnauthorizedAdminElevation(Long targetRoleId, Long actorUserId) {
+        if (!SystemRoleConstants.isAdminRoleId(targetRoleId)) {
+            return;
+        }
+        if (actorUserId == null) {
+            throw new BusinessException(
+                    "Attribution du rôle ADMIN interdite : acteur non authentifié");
+        }
+        Utilisateur actor = utilisateurRepository.findById(actorUserId)
+                .orElseThrow(() -> new BusinessException(
+                        "Attribution du rôle ADMIN interdite : acteur introuvable"));
+        if (!SystemRoleConstants.isAdminRoleId(actor.getFkRole())) {
+            log.warn("RBAC : tentative d'élévation ADMIN refusée — actor={} targetRole={}",
+                    actorUserId, targetRoleId);
+            throw new BusinessException(
+                    "Seul un administrateur système peut attribuer le rôle ADMIN");
         }
     }
 }

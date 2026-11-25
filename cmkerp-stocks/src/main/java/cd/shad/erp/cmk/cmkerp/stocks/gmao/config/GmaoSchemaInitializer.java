@@ -16,7 +16,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Crée les tables GMAO sur la base ERP legacy (sans Flyway global).
- * Seed la permission OUVRIR_MODULE_GMAO uniquement pour Schadrack (id=1 / username schadrack).
+ * Assure la présence des permissions MODULE_GMAO / OUVRIR_MODULE_GMAO dans le catalogue
+ * (attribution via roles_permissions / sync ADMIN — aucun hardcode utilisateur).
  * <p>
  * Ne doit jamais faire échouer le démarrage du gateway : erreurs de seed = warning uniquement.
  */
@@ -26,8 +27,7 @@ public class GmaoSchemaInitializer implements ApplicationRunner {
 
   private static final Logger log = LoggerFactory.getLogger(GmaoSchemaInitializer.class);
   private static final String PERMISSION_GMAO = "OUVRIR_MODULE_GMAO";
-  private static final long SCHADRACK_USER_ID = 1L;
-  private static final String SCHADRACK_USERNAME = "schadrack";
+  private static final String PERMISSION_MODULE_GMAO = "MODULE_GMAO";
 
   private final JdbcTemplate jdbcTemplate;
   private final DataSource dataSource;
@@ -41,7 +41,7 @@ public class GmaoSchemaInitializer implements ApplicationRunner {
   public void run(ApplicationArguments args) {
     try {
       ensureTables();
-      seedPermissionForSchadrackOnly();
+      ensureGmaoPermissionsInCatalog();
     } catch (Exception ex) {
       log.warn("GMAO : initialisation non bloquante en échec — {}", ex.getMessage(), ex);
     }
@@ -227,69 +227,59 @@ public class GmaoSchemaInitializer implements ApplicationRunner {
     return count != null && count > 0;
   }
 
-  private void seedPermissionForSchadrackOnly() {
+  /** Catalogue uniquement — pas d'attribution hardcodée à un utilisateur. */
+  private void ensureGmaoPermissionsInCatalog() {
     if (!tableExists("permissions")) {
       return;
     }
-
-    Long gmaoPermId = findPermissionId(PERMISSION_GMAO);
-    if (gmaoPermId == null) {
-      gmaoPermId = insertPermission(PERMISSION_GMAO,
-          "Ouvrir le module GMAO (réservé Schadrack MPAKA MABIs)");
-      if (gmaoPermId == null) {
-        gmaoPermId = findPermissionId(PERMISSION_GMAO);
+    Long moduleId = findPermissionId(PERMISSION_MODULE_GMAO);
+    if (moduleId == null) {
+      moduleId = insertPermission(PERMISSION_MODULE_GMAO, "Module GMAO", 0L);
+      if (moduleId == null) {
+        moduleId = findPermissionId(PERMISSION_MODULE_GMAO);
       }
     }
-    if (gmaoPermId == null) {
-      log.warn("GMAO : impossible de résoudre l'id de permission {}", PERMISSION_GMAO);
-      return;
+    Long legacyId = findPermissionId(PERMISSION_GMAO);
+    if (legacyId == null) {
+      insertPermission(PERMISSION_GMAO, "Ouvrir le module GMAO", moduleId != null ? moduleId : 0L);
+      legacyId = findPermissionId(PERMISSION_GMAO);
     }
-
-    if (tableExists("roles_permissions")) {
-      int removed = jdbcTemplate.update(
-          "DELETE FROM roles_permissions WHERE fkPermission = ?", gmaoPermId);
-      if (removed > 0) {
-        log.info("GMAO : {} attribution(s) rôle retirée(s)", removed);
-      }
+    if (moduleId != null && legacyId != null && columnExists("permissions", "parent")) {
+      jdbcTemplate.update("UPDATE permissions SET parent = ?, dateupdate = NOW() WHERE id = ?",
+          moduleId, legacyId);
     }
-
-    if (!tableExists("utilisateurs_permissions")) {
-      return;
+    // Sync ADMIN si présent
+    if (tableExists("roles_permissions") && tableExists("roles")) {
+      jdbcTemplate.update(
+          """
+              INSERT IGNORE INTO roles_permissions (fkRole, fkPermission, datecreate, dateupdate)
+              SELECT 5, p.id, NOW(), NOW() FROM permissions p
+              WHERE p.nom IN (?, ?)
+                AND EXISTS (SELECT 1 FROM roles WHERE id = 5)
+                AND NOT EXISTS (
+                  SELECT 1 FROM roles_permissions rp
+                  WHERE rp.fkRole = 5 AND rp.fkPermission = p.id
+                )
+              """,
+          PERMISSION_MODULE_GMAO, PERMISSION_GMAO);
     }
-
-    Long userId = resolveSchadrackUserId();
-    if (userId == null) {
-      log.warn("GMAO : utilisateur Schadrack introuvable — permission non attribuée");
-      return;
-    }
-
-    Long already = jdbcTemplate.queryForObject(
-        """
-            SELECT COUNT(*) FROM utilisateurs_permissions
-            WHERE fkUtilisateur = ? AND fkPermission = ?
-            """,
-        Long.class, userId, gmaoPermId);
-    if (already != null && already > 0) {
-      return;
-    }
-
-    jdbcTemplate.update(
-        """
-            INSERT INTO utilisateurs_permissions (fkUtilisateur, fkPermission, datecreate)
-            VALUES (?, ?, NOW())
-            """,
-        userId, gmaoPermId);
-    log.info("GMAO : permission {} attribuée à l'utilisateur id={}", PERMISSION_GMAO, userId);
+    log.info("GMAO : permissions catalogue vérifiées ({}, {})", PERMISSION_MODULE_GMAO, PERMISSION_GMAO);
   }
 
-  private Long insertPermission(String nom, String description) {
-    String sql = "INSERT INTO permissions (nom, description, datecreate) VALUES (?, ?, NOW())";
+  private Long insertPermission(String nom, String description, Long parent) {
+    boolean hasParent = columnExists("permissions", "parent");
+    String sql = hasParent
+        ? "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?, ?, ?, NOW(), NOW())"
+        : "INSERT INTO permissions (nom, description, datecreate) VALUES (?, ?, NOW())";
     KeyHolder keyHolder = new GeneratedKeyHolder();
     try {
       jdbcTemplate.update(con -> {
         var ps = con.prepareStatement(sql, new String[] {"id"});
         ps.setString(1, nom);
         ps.setString(2, description);
+        if (hasParent) {
+          ps.setLong(3, parent == null ? 0L : parent);
+        }
         return ps;
       }, keyHolder);
       Number key = keyHolder.getKey();
@@ -299,7 +289,6 @@ public class GmaoSchemaInitializer implements ApplicationRunner {
       }
       log.info("GMAO : permission {} créée", nom);
     } catch (Exception ex) {
-      // Unique déjà présent, course, etc.
       log.debug("GMAO : insert permission {} — {}", nom, ex.getMessage());
     }
     return null;
@@ -311,17 +300,6 @@ public class GmaoSchemaInitializer implements ApplicationRunner {
         (rs, rowNum) -> rs.getLong("id"),
         nom);
     return ids.isEmpty() ? null : ids.get(0);
-  }
-
-  private Long resolveSchadrackUserId() {
-    if (!tableExists("utilisateurs")) {
-      return SCHADRACK_USER_ID;
-    }
-    List<Long> ids = jdbcTemplate.query(
-        "SELECT id FROM utilisateurs WHERE LOWER(username) = ? LIMIT 1",
-        (rs, rowNum) -> rs.getLong("id"),
-        SCHADRACK_USERNAME);
-    return ids.isEmpty() ? SCHADRACK_USER_ID : ids.get(0);
   }
 
   private boolean tableExists(String tableName) {

@@ -20,5 +20,7 @@ public class RoleResponse {
   private String description;
   private LocalDateTime dateCreate;
   private LocalDateTime dateUpdate;
+  /** true pour le rôle système ADMIN (lecture seule côté UI). */
+  private boolean systemProtected;
 }
 

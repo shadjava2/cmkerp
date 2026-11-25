@@ -1,5 +1,8 @@
 package cd.shad.erp.cmk.cmkerp;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration;
@@ -89,6 +92,45 @@ import cd.shad.erp.cmk.cmkerp.gateway.config.StockIntelligenceWebConfiguration;
 public class GatewayApplication {
 
   public static void main(String[] args) {
+    loadLocalEnvironment();
     SpringApplication.run(GatewayApplication.class, args);
+  }
+
+  private static void loadLocalEnvironment() {
+    Path workingDirectory = Path.of("").toAbsolutePath();
+    Path file = workingDirectory.resolve(".env");
+    if (!Files.isRegularFile(file) && workingDirectory.getParent() != null) {
+      file = workingDirectory.getParent().resolve(".env");
+    }
+    if (!Files.isRegularFile(file)) {
+      return;
+    }
+
+    try {
+      for (String line : Files.readAllLines(file)) {
+        String entry = line.trim();
+        if (entry.isEmpty() || entry.startsWith("#")) {
+          continue;
+        }
+        int separator = entry.indexOf('=');
+        if (separator < 1) {
+          throw new IllegalArgumentException("Ligne .env invalide");
+        }
+        String name = entry.substring(0, separator).trim();
+        if (!name.matches("[A-Za-z_][A-Za-z0-9_]*")) {
+          throw new IllegalArgumentException("Nom de variable .env invalide");
+        }
+        String value = entry.substring(separator + 1).trim();
+        if (value.length() >= 2 && ((value.startsWith("\"") && value.endsWith("\""))
+            || (value.startsWith("'") && value.endsWith("'")))) {
+          value = value.substring(1, value.length() - 1);
+        }
+        if (System.getenv(name) == null && System.getProperty(name) == null) {
+          System.setProperty(name, value);
+        }
+      }
+    } catch (IOException exception) {
+      throw new IllegalStateException("Impossible de lire la configuration .env locale", exception);
+    }
   }
 }

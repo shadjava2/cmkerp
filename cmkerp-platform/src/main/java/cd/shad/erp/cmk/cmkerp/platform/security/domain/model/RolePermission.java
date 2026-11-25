@@ -28,6 +28,10 @@ public class RolePermission {
     @Column(name = "fkPermission")
     private Long fkPermission;
 
+    /** Miroir optionnel du parent hiérarchique (alignement schéma live). */
+    @Column(name = "parent")
+    private Long parent;
+
     @Column(name = "datecreate")
     private LocalDateTime dateCreate;
 

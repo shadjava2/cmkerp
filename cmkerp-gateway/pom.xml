@@ -127,6 +127,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- AOP pour @RequirePermission (moteur RBAC déclaratif) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
             <exclusions>
                 <!-- Exclure commons-logging pour éviter les conflits avec spring-jcl -->
                 <exclusion>

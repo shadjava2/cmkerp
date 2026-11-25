@@ -18,6 +18,8 @@ public class PermissionResponse {
   private Long id;
   private String nom;
   private String description;
+  /** 0 = racine ; sinon id de la permission parente. */
+  private Long parent;
   private LocalDateTime dateCreate;
   private LocalDateTime dateUpdate;
 }

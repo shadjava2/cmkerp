@@ -60,6 +60,7 @@ public class AuthController {
   private final JwtTokenProvider jwtTokenProvider;
   private final UtilisateurQueryService utilisateurQueryService;
   private final JwtBlacklistService jwtBlacklistService;
+  private final cd.shad.erp.cmk.cmkerp.sharedkernel.security.PermissionAuthorizationPort permissionAuthorization;
 
   /**
    * Profil Spring actif (dev, prod, etc.) Utilisé pour déterminer si le cookie doit être sécurisé.
@@ -227,6 +228,23 @@ public class AuthController {
     UtilisateurResponse utilisateur = utilisateurQueryService.findById(userId);
 
     return ResponseEntity.ok(utilisateur);
+  }
+
+  /**
+   * Permissions effectives live (DB/cache) — utilisé après révocation sans attendre l'expiration JWT.
+   */
+  @GetMapping("/permissions")
+  @Operation(summary = "Rafraîchit les permissions effectives de l'utilisateur connecté")
+  public ResponseEntity<Map<String, Object>> getLivePermissions(HttpServletRequest httpRequest) {
+    Long userId = getCurrentUserIdFromSecurityContext(httpRequest);
+    // Forcer un rechargement (invalider puis lire)
+    permissionAuthorization.invalidateUserPermissions(userId);
+    var codes = permissionAuthorization.getEffectivePermissions(userId);
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("userId", userId);
+    payload.put("permissions", codes);
+    payload.put("permissionsVersion", permissionAuthorization.getPermissionsVersion(userId));
+    return ResponseEntity.ok(payload);
   }
 
   @PostMapping("/init-password")

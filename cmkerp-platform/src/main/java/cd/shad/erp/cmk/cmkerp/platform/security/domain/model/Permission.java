@@ -26,6 +26,13 @@ public class Permission {
 
     private String description;
 
+    /**
+     * Identifiant de la permission parente.
+     * {@code 0} ou {@code null} = racine (module).
+     */
+    @Column(name = "parent")
+    private Long parent;
+
     @Column(name = "datecreate")
     private LocalDateTime dateCreate;
 

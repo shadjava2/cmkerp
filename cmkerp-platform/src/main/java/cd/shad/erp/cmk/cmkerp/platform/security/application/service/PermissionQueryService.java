@@ -60,10 +60,14 @@ public class PermissionQueryService {
             return null;
         }
 
+        Long parent = permission.getParent();
         return PermissionResponse.builder()
                 .id(permission.getId())
                 .nom(permission.getNom())
                 .description(permission.getDescription())
+                .parent(parent == null ? 0L : parent)
+                .dateCreate(permission.getDateCreate())
+                .dateUpdate(permission.getDateUpdate())
                 .build();
     }
 }

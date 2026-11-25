@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import cd.shad.erp.cmk.cmkerp.gateway.dto.response.ApiError;
@@ -381,13 +382,32 @@ public class GlobalExceptionHandler {
 
         ApiError error = buildApiError(
                 HttpStatus.FORBIDDEN,
-                "Forbidden",
-                "Vous n'avez pas les permissions nécessaires pour accéder à cette ressource.",
+                "PERMISSION_DENIED",
+                "Vous ne disposez pas des autorisations nécessaires pour effectuer cette opération.",
                 path,
                 null
         );
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleResponseStatusException(
+            ResponseStatusException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
+        if (status == null) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        String path = getRequestPath(request);
+        String reason = ex.getReason() != null ? ex.getReason()
+                : "Vous ne disposez pas des autorisations nécessaires pour effectuer cette opération.";
+        String errorLabel = status == HttpStatus.FORBIDDEN ? "PERMISSION_DENIED" : status.getReasonPhrase();
+
+        log.warn("ResponseStatusException -> path: {}, status: {}, message: {}",
+                path, status.value(), reason);
+
+        ApiError error = buildApiError(status, errorLabel, reason, path, null);
+        return ResponseEntity.status(status).body(error);
     }
 
     /**

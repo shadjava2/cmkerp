@@ -5,10 +5,14 @@ import static cd.shad.erp.cmk.cmkerp.sharedkernel.config.ApiPaths.ROLES_BASE;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.JwtTokenProvider;
 
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.AuthTokenExtractor;
+import cd.shad.erp.cmk.cmkerp.platform.dto.request.RolePermissionsUpdateRequest;
 import cd.shad.erp.cmk.cmkerp.platform.dto.request.RoleRequest;
 import cd.shad.erp.cmk.cmkerp.platform.dto.response.PermissionResponse;
+import cd.shad.erp.cmk.cmkerp.platform.dto.response.RolePermissionAuditEntry;
+import cd.shad.erp.cmk.cmkerp.platform.dto.response.RolePermissionsUpdateResponse;
 import cd.shad.erp.cmk.cmkerp.platform.dto.response.RoleResponse;
 import cd.shad.erp.cmk.cmkerp.platform.security.application.service.RoleApplicationService;
+import cd.shad.erp.cmk.cmkerp.sharedkernel.security.RequirePermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -102,6 +106,34 @@ public class RoleRestController {
     public ResponseEntity<List<PermissionResponse>> getPermissions(@PathVariable Long id) {
         List<PermissionResponse> permissions = roleApplicationService.getPermissions(id);
         return ResponseEntity.ok(permissions);
+    }
+
+    /**
+     * Met à jour les permissions d'un rôle (diff transactionnel). ADMIN interdit.
+     */
+    @PutMapping("/{id}/permissions")
+    @RequirePermission({"ADMIN_ROLES_MANAGE", "OUVRIR_ADMINISTRATION", "manage_roles"})
+    @Operation(summary = "Met à jour les permissions d'un rôle")
+    public ResponseEntity<RolePermissionsUpdateResponse> updatePermissions(
+            @PathVariable Long id,
+            @Valid @RequestBody RolePermissionsUpdateRequest request,
+            HttpServletRequest httpRequest) {
+        Long currentUserId = getCurrentUserId(httpRequest);
+        RolePermissionsUpdateResponse updated =
+                roleApplicationService.updatePermissions(id, request, currentUserId);
+        return ResponseEntity.ok(updated);
+    }
+
+    /**
+     * Historique des modifications de permissions d'un rôle (audit_events).
+     */
+    @GetMapping("/{id}/permission-audit")
+    @RequirePermission({"ADMIN_ROLES_MANAGE", "OUVRIR_ADMINISTRATION", "manage_roles"})
+    @Operation(summary = "Historique des modifications de permissions d'un rôle")
+    public ResponseEntity<List<RolePermissionAuditEntry>> permissionAudit(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "30") int limit) {
+        return ResponseEntity.ok(roleApplicationService.listPermissionAudit(id, limit));
     }
 
     /**
