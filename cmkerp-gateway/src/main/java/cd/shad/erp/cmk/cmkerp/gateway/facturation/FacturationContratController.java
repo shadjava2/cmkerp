@@ -98,6 +98,20 @@ public class FacturationContratController {
     return ResponseEntity.ok(service.syncStatus());
   }
 
+  @GetMapping("/clinic-sync/outbox")
+  public ResponseEntity<Map<String, Object>> outbox(
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return ResponseEntity.ok(service.listOutbox(status, page, size));
+  }
+
+  @PostMapping("/clinic-sync/outbox/prepare")
+  public ResponseEntity<Map<String, Object>> prepareOutbox(HttpServletRequest request) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
+    return ResponseEntity.ok(service.prepareSuspendedIntentions(userId));
+  }
+
   private static String stringVal(Object o) {
     return o == null ? null : String.valueOf(o);
   }

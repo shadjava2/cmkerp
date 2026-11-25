@@ -1,0 +1,27 @@
+---
+description: Moteur de synchronisation bidirectionnelle CLINIQUE ↔ CMK ERP (outbox, rapprochement, reprise)
+alwaysApply: true
+---
+
+# CLINIQUE BIDIRECTIONAL SYNC — MANDATORY
+
+## Principes
+
+1. **Intentions ≠ exécution.** Toute opération ERP destinée à CLINIQUE est journalisée dans `erp_sync_outbox` même si les écritures SQL Server sont désactivées (`SUSPENDED`).
+2. **Écritures Beach** : uniquement via worker outbox + `ClinicLegacyWriteGuard` + feature flags (`clinic.beach.write-enabled`, défaut `false`).
+3. **Imports CLINIQUE → ERP** : SELECT SQL Server + INSERT MySQL ; **pas** d’outbox retour.
+4. **`actif`** : propriété exclusivement ERP — jamais répliquée.
+5. **TCONTRAT** : colonnes réplicables `CODE`, `DESIGNATION` uniquement.
+6. **CLINIQUE CH / Mediline** : aucune écriture dans ce chantier.
+7. **Idempotence** : `operation_id` unique ; pas de double INSERT ; relance via le même moteur.
+8. **UI** : centre de synchronisation = supervision + file + référentiels ; import sélectif via `ErpImportDialog` ; pas de dialogues natifs.
+
+## Statuts outbox
+
+`PENDING` | `SUSPENDED` | `IN_PROGRESS` | `SYNCED` | `FAILED` | `CONFLICT` | `UNCERTAIN`
+
+## Ne pas
+
+- Perdre une intention parce que `write-enabled=false`.
+- Activer les écritures production sans autorisation explicite.
+- Présenter un référentiel non intégré comme synchronisable.

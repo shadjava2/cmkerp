@@ -3,6 +3,7 @@ package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -194,13 +195,13 @@ public class ErpContratRepository {
   }
 
   public void enqueueOutbox(String operationId, String entityType, Long entityId, String legacyKey,
-      String operationType, String payloadJson, String correlationId) {
+      String operationType, String payloadJson, String correlationId, String status) {
     jdbc.update(
         """
             INSERT INTO erp_sync_outbox
               (operation_id, entity_type, entity_id, legacy_key, source_system, target_system,
                operation_type, payload_json, status, attempt_count, correlation_id)
-            VALUES (?, ?, ?, ?, 'ERP', 'CLINIQUE_BEACH', ?, ?, 'PENDING', 0, ?)
+            VALUES (?, ?, ?, ?, 'ERP', 'CLINIQUE_BEACH', ?, ?, ?, 0, ?)
             """,
         operationId,
         entityType,
@@ -208,6 +209,7 @@ public class ErpContratRepository {
         legacyKey,
         operationType,
         payloadJson,
+        status == null || status.isBlank() ? "PENDING" : status,
         correlationId);
   }
 
@@ -215,6 +217,162 @@ public class ErpContratRepository {
     Long n = jdbc.queryForObject(
         "SELECT COUNT(*) FROM erp_sync_outbox WHERE status = ?", Long.class, status);
     return n == null ? 0 : n;
+  }
+
+  public long countBySourceSystem(String sourceSystem) {
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM erp_contrats WHERE source_system = ?", Long.class, sourceSystem);
+    return n == null ? 0 : n;
+  }
+
+  public long countBySyncStatus(String syncStatus) {
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM erp_contrats WHERE sync_status = ?", Long.class, syncStatus);
+    return n == null ? 0 : n;
+  }
+
+  public boolean hasOpenOutbox(long entityId, String entityType) {
+    Long n = jdbc.queryForObject(
+        """
+            SELECT COUNT(*) FROM erp_sync_outbox
+            WHERE entity_id = ? AND entity_type = ?
+              AND status IN ('PENDING', 'SUSPENDED', 'IN_PROGRESS', 'UNCERTAIN')
+            """,
+        Long.class,
+        entityId,
+        entityType);
+    return n != null && n > 0;
+  }
+
+  public List<ErpContratRecord> listBySourceSystem(String sourceSystem) {
+    return jdbc.query(
+        """
+            SELECT id, code, designation, actif, source_system, legacy_code, sync_status,
+                   last_synced_at, version, datecreate, dateupdate
+            FROM erp_contrats WHERE source_system = ? ORDER BY code
+            """,
+        MAPPER,
+        sourceSystem);
+  }
+
+  public List<Map<String, Object>> listOutbox(String status, int limit, int offset) {
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT id, operation_id, entity_type, entity_id, legacy_key, operation_type, status,
+                   attempt_count, last_error, correlation_id, datecreate, datesynced, dateupdate
+            FROM erp_sync_outbox WHERE 1=1
+            """);
+    var args = new java.util.ArrayList<Object>();
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND status = ?");
+      args.add(status);
+    }
+    sql.append(" ORDER BY id DESC LIMIT ? OFFSET ?");
+    args.add(Math.min(Math.max(limit, 1), 200));
+    args.add(Math.max(offset, 0));
+    return jdbc.query(sql.toString(), (rs, i) -> {
+      Map<String, Object> row = new java.util.LinkedHashMap<>();
+      row.put("id", rs.getLong("id"));
+      row.put("operationId", rs.getString("operation_id"));
+      row.put("entityType", rs.getString("entity_type"));
+      row.put("entityId", rs.getObject("entity_id"));
+      row.put("legacyKey", rs.getString("legacy_key"));
+      row.put("operationType", rs.getString("operation_type"));
+      row.put("status", rs.getString("status"));
+      row.put("attemptCount", rs.getInt("attempt_count"));
+      row.put("lastError", rs.getString("last_error"));
+      row.put("correlationId", rs.getString("correlation_id"));
+      row.put("createdAt", rs.getTimestamp("datecreate"));
+      row.put("syncedAt", rs.getTimestamp("datesynced"));
+      row.put("updatedAt", rs.getTimestamp("dateupdate"));
+      return row;
+    }, args.toArray());
+  }
+
+  public int promoteSuspendedToPending() {
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'PENDING', dateupdate = NOW()
+            WHERE status = 'SUSPENDED'
+            """);
+  }
+
+  public List<Map<String, Object>> claimPendingOutbox(int limit) {
+    List<Map<String, Object>> rows = jdbc.query(
+        """
+            SELECT id, operation_id, entity_type, entity_id, legacy_key, operation_type, payload_json,
+                   status, attempt_count, correlation_id
+            FROM erp_sync_outbox
+            WHERE status = 'PENDING'
+              AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new java.util.LinkedHashMap<>();
+          row.put("id", rs.getLong("id"));
+          row.put("operationId", rs.getString("operation_id"));
+          row.put("entityType", rs.getString("entity_type"));
+          row.put("entityId", rs.getObject("entity_id"));
+          row.put("legacyKey", rs.getString("legacy_key"));
+          row.put("operationType", rs.getString("operation_type"));
+          row.put("payloadJson", rs.getString("payload_json"));
+          row.put("attemptCount", rs.getInt("attempt_count"));
+          row.put("correlationId", rs.getString("correlation_id"));
+          return row;
+        },
+        Math.min(Math.max(limit, 1), 50));
+    for (Map<String, Object> row : rows) {
+      jdbc.update(
+          """
+              UPDATE erp_sync_outbox
+              SET status = 'IN_PROGRESS', attempt_count = attempt_count + 1, dateupdate = NOW()
+              WHERE id = ? AND status = 'PENDING'
+              """,
+          row.get("id"));
+    }
+    return rows;
+  }
+
+  public void markOutboxSynced(long id) {
+    jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'SYNCED', datesynced = NOW(), last_error = NULL, dateupdate = NOW()
+            WHERE id = ?
+            """,
+        id);
+  }
+
+  public void markOutboxFailed(long id, String error) {
+    jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'FAILED', last_error = ?, next_attempt_at = DATE_ADD(NOW(), INTERVAL (attempt_count * 2) MINUTE),
+                dateupdate = NOW()
+            WHERE id = ?
+            """,
+        error == null ? null : (error.length() > 900 ? error.substring(0, 900) : error),
+        id);
+  }
+
+  public void markContratSynced(long id, String legacyCode) {
+    jdbc.update(
+        """
+            UPDATE erp_contrats
+            SET sync_status = 'SYNCED', legacy_code = ?, last_synced_at = NOW(), dateupdate = NOW()
+            WHERE id = ?
+            """,
+        legacyCode,
+        id);
+  }
+
+  public void updateSyncStatus(long id, String syncStatus) {
+    jdbc.update(
+        "UPDATE erp_contrats SET sync_status = ?, dateupdate = NOW() WHERE id = ?",
+        syncStatus,
+        id);
   }
 
   static String normalizeCode(String code) {

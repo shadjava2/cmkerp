@@ -61,11 +61,10 @@ public class ErpContratService {
     if (repository.findByCode(normalized).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Code contrat déjà existant: " + normalized);
     }
-    String syncStatus = writeGuard.beachWriteEnabled() ? "PENDING" : "LOCAL_ONLY";
+    // Intention de réplication toujours journalisée (SUSPENDED si écritures Beach off).
+    String syncStatus = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
     long id = repository.insert(normalized, designation, true, "OPERATION_ERP", null, syncStatus, userId);
-    if (writeGuard.beachWriteEnabled()) {
-      enqueueReplication(id, normalized, designation, "INSERT", userId);
-    }
+    enqueueReplication(id, normalized, designation, "INSERT", userId);
     return get(id);
   }
 
@@ -76,11 +75,14 @@ public class ErpContratService {
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger le contrat");
     }
-    if (writeGuard.beachWriteEnabled() && current.legacyCode() != null) {
-      enqueueReplication(id, current.code(), designation, "UPDATE", userId);
-    } else if (writeGuard.beachWriteEnabled() && current.legacyCode() == null) {
-      enqueueReplication(id, current.code(), designation, "INSERT", userId);
+    if ("IMPORT_CLINIQUE".equalsIgnoreCase(current.sourceSystem()) && current.legacyCode() != null) {
+      // Import entrant : pas d'écriture retour automatique.
+      return get(id);
     }
+    String op = current.legacyCode() != null ? "UPDATE" : "INSERT";
+    enqueueReplication(id, current.code(), designation, op, userId);
+    String syncStatus = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
+    repository.updateSyncStatus(id, syncStatus);
     return get(id);
   }
 
@@ -283,31 +285,155 @@ public class ErpContratService {
     status.put("chWriteEnabled", writeGuard.chWriteEnabled());
     status.put("erpContrats", repository.count(null, null));
     status.put("outboxPending", repository.countOutboxByStatus("PENDING"));
+    status.put("outboxSuspended", repository.countOutboxByStatus("SUSPENDED"));
+    status.put("outboxInProgress", repository.countOutboxByStatus("IN_PROGRESS"));
     status.put("outboxFailed", repository.countOutboxByStatus("FAILED"));
     status.put("outboxConflict", repository.countOutboxByStatus("CONFLICT"));
     status.put("outboxSynced", repository.countOutboxByStatus("SYNCED"));
+    status.put("outboxUncertain", repository.countOutboxByStatus("UNCERTAIN"));
+    status.put("comparedAt", java.time.Instant.now().toString());
+
+    int clinicOnly = 0;
+    int erpOnly = 0;
+    int matched = 0;
+    int divergences = 0;
+    Integer legacyTotal = null;
     if (legacyReader.available()) {
       try {
-        status.put("legacyContrats", legacyReader.count());
+        Map<String, Object> candidates = listImportCandidates(null);
+        clinicOnly = ((Number) candidates.getOrDefault("available", 0)).intValue();
+        matched = ((Number) candidates.getOrDefault("alreadyImported", 0)).intValue()
+            - ((Number) candidates.getOrDefault("divergences", 0)).intValue();
+        divergences = ((Number) candidates.getOrDefault("divergences", 0)).intValue();
+        legacyTotal = ((Number) candidates.get("sourceTotal")).intValue();
+        status.put("legacyContrats", legacyTotal);
+        java.util.HashSet<String> clinicCodes = new java.util.HashSet<>();
+        for (ClinicContratLegacyRow row : legacyReader.listAll()) {
+          try {
+            String c = ErpContratRepository.normalizeCode(row.code());
+            if (c != null) {
+              clinicCodes.add(c);
+            }
+          } catch (IllegalArgumentException ignored) {
+            // ignore
+          }
+        }
+        for (ErpContratRecord erp : repository.search(null, null, 500, 0)) {
+          if (!clinicCodes.contains(erp.code())) {
+            erpOnly++;
+          }
+        }
       } catch (Exception ex) {
         status.put("legacyContrats", null);
         status.put("legacyError", ex.getMessage());
       }
     } else {
       status.put("legacyContrats", null);
+      erpOnly = (int) repository.count(null, null);
     }
+    status.put("clinicOnly", clinicOnly);
+    status.put("erpOnly", erpOnly);
+    status.put("matched", Math.max(matched, 0));
+    status.put("divergences", divergences);
+    status.put("referentials", listReferentialsSummary(clinicOnly, erpOnly, divergences, legacyTotal));
     return status;
   }
 
+  public Map<String, Object> listOutbox(String status, int page, int size) {
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    int safePage = Math.max(page, 0);
+    List<Map<String, Object>> items = repository.listOutbox(status, safeSize, safePage * safeSize);
+    Map<String, Object> result = new HashMap<>();
+    result.put("items", items);
+    result.put("page", safePage);
+    result.put("size", safeSize);
+    return result;
+  }
+
+  /**
+   * Prépare les intentions manquantes pour les contrats ERP-only (ex. créés avant correction Outbox).
+   */
+  @Transactional
+  public Map<String, Object> prepareSuspendedIntentions(Long userId) {
+    int prepared = 0;
+    int skipped = 0;
+    for (ErpContratRecord row : repository.listBySourceSystem("OPERATION_ERP")) {
+      if (repository.hasOpenOutbox(row.id(), "TCONTRAT")) {
+        skipped++;
+        continue;
+      }
+      enqueueReplication(row.id(), row.code(), row.designation(), "INSERT", userId);
+      repository.updateSyncStatus(row.id(), writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED");
+      prepared++;
+    }
+    return Map.of("prepared", prepared, "skipped", skipped);
+  }
+
+  private List<Map<String, Object>> listReferentialsSummary(
+      int clinicOnly, int erpOnly, int divergences, Integer legacyTotal) {
+    long erpCount = repository.count(null, null);
+    Map<String, Object> contrats = new HashMap<>();
+    contrats.put("code", "CONTRATS");
+    contrats.put("label", "Contrats");
+    contrats.put("integrated", true);
+    contrats.put("mode", writeGuard.beachWriteEnabled() ? "BIDIRECTIONAL_GATED" : "CLINIQUE_TO_ERP");
+    contrats.put("erpCount", erpCount);
+    contrats.put("clinicCount", legacyTotal);
+    contrats.put("erpOnly", erpOnly);
+    contrats.put("clinicOnly", clinicOnly);
+    contrats.put("divergences", divergences);
+    contrats.put("pending", repository.countOutboxByStatus("PENDING"));
+    contrats.put("suspended", repository.countOutboxByStatus("SUSPENDED"));
+    contrats.put("state", clinicOnly > 0 || erpOnly > 0 || divergences > 0 ? "A_RAPPROCHER" : "A_JOUR");
+
+    java.util.ArrayList<Map<String, Object>> list = new java.util.ArrayList<>();
+    list.add(contrats);
+    for (String[] ref : new String[][] {
+        {"SERVICES", "Services"},
+        {"IMPUTATIONS", "Imputations"},
+        {"LOCATIONS", "Locations"},
+        {"SOCIETES", "Sociétés"},
+        {"CLASSES", "Classes"},
+        {"TARIFS", "Tarifs"},
+        {"MEDECINS", "Médecins"},
+        {"AYANTS_DROIT", "Ayants droit"},
+        {"UTILISATEURS", "Utilisateurs"},
+        {"PHARMACIES", "Pharmacies"},
+        {"PRODUITS", "Produits"},
+        {"STOCK", "Stock"},
+        {"PRESTATIONS", "Prestations"},
+        {"MEDICAMENTS", "Médicaments"}
+    }) {
+      Map<String, Object> item = new HashMap<>();
+      item.put("code", ref[0]);
+      item.put("label", ref[1]);
+      item.put("integrated", false);
+      item.put("mode", "NOT_READY");
+      item.put("erpCount", null);
+      item.put("clinicCount", null);
+      item.put("state", "NON_IMPLEMENTE");
+      list.add(item);
+    }
+    return list;
+  }
+
+  /**
+   * Journalise l'intention même si les écritures Beach sont désactivées (statut SUSPENDED).
+   * Aucune écriture SQL Server ici.
+   */
   private void enqueueReplication(long id, String code, String designation, String op, Long userId) {
     writeGuard.assertChWriteForbidden();
-    writeGuard.assertBeachWriteAllowed("TCONTRAT." + op);
+    if (repository.hasOpenOutbox(id, "TCONTRAT")) {
+      return;
+    }
+    String status = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
     try {
-      Map<String, Object> payload = Map.of(
-          "code", code,
-          "designation", designation == null ? "" : designation,
-          "operation", op,
-          "userId", userId == null ? 0 : userId);
+      Map<String, Object> payload = new HashMap<>();
+      payload.put("code", code);
+      payload.put("designation", designation == null ? "" : designation);
+      payload.put("operation", op);
+      payload.put("userId", userId == null ? 0 : userId);
+      payload.put("columns", List.of("CODE", "DESIGNATION"));
       repository.enqueueOutbox(
           UUID.randomUUID().toString(),
           "TCONTRAT",
@@ -315,9 +441,10 @@ public class ErpContratService {
           code,
           op,
           objectMapper.writeValueAsString(payload),
-          UUID.randomUUID().toString());
+          UUID.randomUUID().toString(),
+          status);
     } catch (JsonProcessingException e) {
-      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Sérialisation outbox impossible");
+      throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Journalisation synchronisation impossible");
     }
   }
 }
