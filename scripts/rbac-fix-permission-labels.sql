@@ -1,9 +1,11 @@
 -- Libellés français pour MODULE_* / SIDEBAR_* (idempotent)
-UPDATE permissions SET description='Module Administration', dateupdate=NOW() WHERE nom='MODULE_ADMINISTRATION';
-UPDATE permissions SET description='Module Pilotage du stock', dateupdate=NOW() WHERE nom='MODULE_PILOTAGE_STOCK';
-UPDATE permissions SET description='Module Stock et mouvements', dateupdate=NOW() WHERE nom='MODULE_STOCK';
-UPDATE permissions SET description='Module GMAO', dateupdate=NOW() WHERE nom='MODULE_GMAO';
-UPDATE permissions SET description='Dossier patient', dateupdate=NOW() WHERE nom='MODULE_DMI';
+UPDATE permissions SET description='Accéder au module Administration', dateupdate=NOW() WHERE nom='MODULE_ADMINISTRATION';
+UPDATE permissions SET description='Accéder au module Pilotage', dateupdate=NOW() WHERE nom='MODULE_PILOTAGE_STOCK';
+UPDATE permissions SET description='Accéder au module Stock', dateupdate=NOW() WHERE nom='MODULE_STOCK';
+UPDATE permissions SET description='Accéder au module GMAO', dateupdate=NOW() WHERE nom='MODULE_GMAO';
+UPDATE permissions SET description='Accéder au module DMI', dateupdate=NOW() WHERE nom='MODULE_DMI';
+UPDATE permissions SET description='Accéder au module Facturation', dateupdate=NOW() WHERE nom='MODULE_FACTURATION';
+UPDATE permissions SET description='Menu Accueil du module Facturation', dateupdate=NOW() WHERE nom='SIDEBAR_FACTURATION_ACCUEIL';
 UPDATE permissions SET description='Accéder à l''accueil du dossier patient', dateupdate=NOW() WHERE nom='SIDEBAR_ACCUEIL';
 UPDATE permissions SET description='Accéder à la réception', dateupdate=NOW() WHERE nom='SIDEBAR_RECEPTION';
 UPDATE permissions SET description='Accéder au cardex des patients', dateupdate=NOW() WHERE nom='SIDEBAR_CARDEX';

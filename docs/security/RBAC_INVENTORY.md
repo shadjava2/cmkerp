@@ -10,10 +10,21 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Module | Emplacement | Route | Permission | Parent | État |
 | --- | --- | --- | --- | --- | --- |
 | Administration | `accessZones.ts` | `/administration` | `MODULE_ADMINISTRATION` | 0 | OK |
-| Pilotage stock | `accessZones.ts` | `/portail/pilotage` | `MODULE_PILOTAGE_STOCK` | 0 | OK |
-| Stock & mouvements | `accessZones.ts` | `/portail/stock-mouvements` | `MODULE_STOCK` | 0 | OK |
+| Pilotage | `accessZones.ts` | `/portail/pilotage` | `MODULE_PILOTAGE_STOCK` | 0 | OK |
+| Stock | `accessZones.ts` | `/portail/stock-mouvements` | `MODULE_STOCK` | 0 | OK |
 | GMAO | `accessZones.ts` | `/gmao` | `MODULE_GMAO` | 0 | OK |
-| Dossier patient (DMI) | `accessZones.ts` | `/dossier-patient` | `MODULE_DMI` | 0 | OK |
+| DMI | `accessZones.ts` | `/dossier-patient` | `MODULE_DMI` | 0 | OK |
+| Facturation | `accessZones.ts` | `/facturation` | `MODULE_FACTURATION` | 0 | OK |
+
+### Facturation — menus implémentés (v1)
+
+| Menu / capacité | Permission | Parent / réutilisation | État |
+| --- | --- | --- | --- |
+| Accueil module | `SIDEBAR_FACTURATION_ACCUEIL` | `MODULE_FACTURATION` | OK |
+| Circuits contrats / privées | `STOCK_VENTE_VIEW` (+ `STOCK_VENTE_CREATE` pour création) | `MODULE_STOCK` (API partagée) | OK — réutilisation |
+| Sync Beach ↔ CH | `STOCK_FACTURATION_SYNC` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
+| Facturation des soins (DMI) | `SIDEBAR_FACTURATION` | `MODULE_DMI` | Conservé (parcours clinique) |
+| Dashboard / conventions / créances / remboursements natifs | — | — | Backlog |
 
 ## 2. Sidebar DMI
 

@@ -46,6 +46,7 @@ public class RbacSchemaInitializer implements ApplicationRunner {
       seedPhase2Granular();
       seedPhase3AdminConsole();
       seedFunctionalCatalogSql();
+      seedModuleFacturation();
       syncAdmin();
       ensureAdminProtectTrigger();
       ensurePermissionFkCascade();
@@ -58,11 +59,11 @@ public class RbacSchemaInitializer implements ApplicationRunner {
 
   private void seedCatalog() {
     Object[][] roots = {
-        {436L, "MODULE_ADMINISTRATION", "Module Administration", 0L},
-        {437L, "MODULE_PILOTAGE_STOCK", "Module Pilotage du stock", 0L},
-        {438L, "MODULE_STOCK", "Module Stock et mouvements", 0L},
-        {439L, "MODULE_GMAO", "Module GMAO", 0L},
-        {440L, "MODULE_DMI", "Module Dossier médical informatisé", 0L},
+        {436L, "MODULE_ADMINISTRATION", "Accéder au module Administration", 0L},
+        {437L, "MODULE_PILOTAGE_STOCK", "Accéder au module Pilotage", 0L},
+        {438L, "MODULE_STOCK", "Accéder au module Stock", 0L},
+        {439L, "MODULE_GMAO", "Accéder au module GMAO", 0L},
+        {440L, "MODULE_DMI", "Accéder au module DMI", 0L},
     };
     for (Object[] row : roots) {
       upsertPermission((Long) row[0], (String) row[1], (String) row[2], (Long) row[3]);
@@ -249,6 +250,35 @@ public class RbacSchemaInitializer implements ApplicationRunner {
       log.info("RBAC : catalogue fonctionnel V27 appliqué / vérifié");
     } catch (Exception ex) {
       log.warn("RBAC : échec application V27 — {}", ex.getMessage());
+    }
+  }
+
+  /**
+   * Module Facturation autonome — racine + menu Accueil uniquement (capacités ventes réutilisent STOCK_*).
+   * Pas d'ID numérique imposé ; sync ADMIN via {@link #syncAdmin()}.
+   */
+  private void seedModuleFacturation() {
+    if (findPermissionId("MODULE_FACTURATION") == null) {
+      jdbc.update(
+          "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,0,NOW(),NOW())",
+          "MODULE_FACTURATION", "Accéder au module Facturation");
+    } else {
+      jdbc.update(
+          "UPDATE permissions SET description = ?, parent = 0, dateupdate = NOW() WHERE nom = ?",
+          "Accéder au module Facturation", "MODULE_FACTURATION");
+    }
+    Long moduleId = findPermissionId("MODULE_FACTURATION");
+    if (moduleId == null) {
+      return;
+    }
+    if (findPermissionId("SIDEBAR_FACTURATION_ACCUEIL") == null) {
+      jdbc.update(
+          "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,?,NOW(),NOW())",
+          "SIDEBAR_FACTURATION_ACCUEIL", "Menu Accueil du module Facturation", moduleId);
+    } else {
+      jdbc.update(
+          "UPDATE permissions SET description = ?, parent = ?, dateupdate = NOW() WHERE nom = ?",
+          "Menu Accueil du module Facturation", moduleId, "SIDEBAR_FACTURATION_ACCUEIL");
     }
   }
 

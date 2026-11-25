@@ -100,6 +100,9 @@ FROM (
   UNION ALL SELECT 'ADMIN_RBAC_INTEGRITY_VIEW', 'Vérifier l''intégrité du rôle ADMIN', 'MODULE_ADMINISTRATION'
   UNION ALL SELECT 'ADMIN_RBAC_INTEGRITY_REPAIR', 'Réparer la synchronisation ADMIN', 'MODULE_ADMINISTRATION'
   UNION ALL SELECT 'ADMIN_USAGE_VIEW', 'Consulter l''historique d''utilisation', 'MODULE_ADMINISTRATION'
+  -- Facturation (module autonome — circuits ventes réutilisent STOCK_*)
+  UNION ALL SELECT 'MODULE_FACTURATION', 'Accéder au module Facturation', NULL
+  UNION ALL SELECT 'SIDEBAR_FACTURATION_ACCUEIL', 'Menu Accueil du module Facturation', 'MODULE_FACTURATION'
   -- Stock
   UNION ALL SELECT 'STOCK_VIEW', 'Consulter le module stock', 'MODULE_STOCK'
   UNION ALL SELECT 'STOCK_PRODUIT_VIEW', 'Consulter les produits', 'MODULE_STOCK'
