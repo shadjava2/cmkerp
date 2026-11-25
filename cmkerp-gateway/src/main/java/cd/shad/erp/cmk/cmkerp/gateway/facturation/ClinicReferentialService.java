@@ -1,5 +1,7 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -39,6 +41,7 @@ public class ClinicReferentialService {
   private final ClinicReferentialLegacyReader legacyReader;
   private final ClinicLegacyWriteGuard writeGuard;
   private final SiteQueryService siteQueryService;
+  private final ErpFacturationRelationalStore relationalStore;
   private final ObjectMapper objectMapper;
 
   public ClinicReferentialService(
@@ -46,11 +49,13 @@ public class ClinicReferentialService {
       ClinicReferentialLegacyReader legacyReader,
       ClinicLegacyWriteGuard writeGuard,
       SiteQueryService siteQueryService,
+      ErpFacturationRelationalStore relationalStore,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.legacyReader = legacyReader;
     this.writeGuard = writeGuard;
     this.siteQueryService = siteQueryService;
+    this.relationalStore = relationalStore;
     this.objectMapper = objectMapper;
   }
 
@@ -58,6 +63,20 @@ public class ClinicReferentialService {
     Definition def = require(key);
     int safeSize = Math.min(Math.max(size, 1), 200);
     int safePage = Math.max(page, 0);
+    // Lecture prioritaire des tables métier normalisées (libellés FK) lorsque disponibles.
+    if (relationalStore.supports(def.code())) {
+      List<Map<String, Object>> items =
+          relationalStore.search(def.code(), q, actif, safeSize, safePage * safeSize);
+      Map<String, Object> result = new LinkedHashMap<>();
+      result.put("code", def.code());
+      result.put("label", def.label());
+      result.put("items", items);
+      result.put("total", relationalStore.count(def.code(), q, actif));
+      result.put("page", safePage);
+      result.put("size", safeSize);
+      result.put("relational", true);
+      return result;
+    }
     List<Map<String, Object>> items = repository
         .search(def.code(), q, actif, safeSize, safePage * safeSize)
         .stream()
@@ -70,11 +89,16 @@ public class ClinicReferentialService {
     result.put("total", repository.count(def.code(), q, actif));
     result.put("page", safePage);
     result.put("size", safeSize);
+    result.put("relational", false);
     return result;
   }
 
   public Map<String, Object> get(String key, long id) {
     Definition def = require(key);
+    if (relationalStore.supports(def.code())) {
+      return relationalStore.findById(def.code(), id)
+          .orElseGet(() -> toView(requireRow(def, id)));
+    }
     return toView(requireRow(def, id));
   }
 
@@ -94,19 +118,26 @@ public class ClinicReferentialService {
     String syncStatus = !replicate
         ? "LOCAL_ONLY"
         : (writeGuard.beachEntityWriteEnabled(def.entityType()) ? "PENDING" : "SUSPENDED");
+    String fingerprint = ClinicReferentialValues.fingerprint(def, normalized);
     long id = repository.insert(
         def.code(),
         nk,
         displayLabel(def, normalized),
         writeJson(payload),
-        ClinicReferentialValues.fingerprint(def, normalized),
+        fingerprint,
         true,
         "OPERATION_ERP",
         null,
         syncStatus,
         userId);
+    mirrorRelationalImport(def, nk, normalized, fingerprint);
     if (replicate) {
       enqueue(def, id, nk, normalized, "INSERT");
+    }
+    if (relationalStore.supports(def.code())) {
+      return relationalStore.search(def.code(), nk, true, 1, 0).stream()
+          .findFirst()
+          .orElseGet(() -> toView(requireRow(def, id)));
     }
     return toView(requireRow(def, id));
   }
@@ -176,6 +207,14 @@ public class ClinicReferentialService {
   @Transactional
   public Map<String, Object> setActif(String key, long id, boolean actif, int version, Long userId) {
     Definition def = require(key);
+    if (relationalStore.supports(def.code())) {
+      int updated = relationalStore.updateActif(def.code(), id, actif, version, userId);
+      if (updated == 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger la fiche.");
+      }
+      return relationalStore.findById(def.code(), id)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Élément introuvable."));
+    }
     int updated = repository.updateActif(def.code(), id, actif, version, userId);
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger la fiche.");
@@ -284,12 +323,14 @@ public class ClinicReferentialService {
         failed++;
         continue;
       }
+      String fingerprint = ClinicReferentialValues.fingerprint(def, normalized);
       int created = repository.insertIfAbsent(
           def.code(),
           nk,
           displayLabel(def, normalized),
           writeJson(normalized),
-          ClinicReferentialValues.fingerprint(def, normalized));
+          fingerprint);
+      mirrorRelationalImport(def, nk, normalized, fingerprint);
       if (created == 1) {
         imported++;
       } else {
@@ -320,7 +361,9 @@ public class ClinicReferentialService {
       boolean erpFailed = schemaMissing;
       if (!schemaMissing) {
         try {
-          erpCount = repository.count(def.code(), null, null);
+          erpCount = relationalStore.supports(def.code())
+              ? relationalStore.count(def.code(), null, null)
+              : repository.count(def.code(), null, null);
         } catch (DataAccessException ex) {
           schemaMissing = true;
           erpFailed = true;
@@ -656,6 +699,135 @@ public class ClinicReferentialService {
       return "CLINIQUE_TO_ERP";
     }
     return "BIDIRECTIONAL_GATED";
+  }
+
+  /** Miroir idempotent vers les tables métier — sans outbox Beach. */
+  private void mirrorRelationalImport(
+      Definition def, String naturalKey, Map<String, Object> normalized, String fingerprint) {
+    if (!relationalStore.supports(def.code())) {
+      return;
+    }
+    switch (def.code()) {
+      case "SERVICES" -> relationalStore.upsertServiceFromImport(
+          naturalKey, str(normalized, "LIBELLE"), fingerprint);
+      case "IMPUTATIONS" -> relationalStore.upsertImputationFromImport(
+          naturalKey, first(normalized, "DESIGNATION", "LIBELLE"), fingerprint);
+      case "LOCATIONS" -> relationalStore.upsertLocationFromImport(
+          naturalKey,
+          first(normalized, "LIBELLE", "DESIGNATION"),
+          str(normalized, "ADRESSE"),
+          longOrNull(normalized.get("siteId")),
+          fingerprint);
+      case "MEDECINS" -> relationalStore.upsertMedecinFromImport(
+          naturalKey, first(normalized, "NOM", "NOMMED", "DESIGNATION"), fingerprint);
+      case "SOCIETES" -> relationalStore.upsertSocieteFromImport(
+          naturalKey,
+          str(normalized, "NOMSOC"),
+          str(normalized, "ADRESSE"),
+          str(normalized, "N_IMPOT"),
+          str(normalized, "NRC"),
+          str(normalized, "ID_NAT"),
+          str(normalized, "CONTRAT"),
+          fingerprint);
+      case "CLASSES" -> relationalStore.upsertClasseFromImport(
+          naturalKey, first(normalized, "LIBELLE", "DESIGNATION"), str(normalized, "SERVICE"), fingerprint);
+      case "TARIFS" -> relationalStore.upsertTarifFromImport(
+          naturalKey,
+          str(normalized, "LIBPRES"),
+          str(normalized, "CODESERV"),
+          str(normalized, "CLASSE"),
+          str(normalized, "IMPUTATION"),
+          decimal(normalized, "MONTANT"),
+          decimal(normalized, "MONTPRIVE"),
+          fingerprint);
+      case "AYANTS_DROIT" -> relationalStore.upsertAyantFromImport(
+          naturalKey,
+          str(normalized, "NOM"),
+          str(normalized, "SEXE"),
+          localDate(normalized.get("DATENAIS")),
+          str(normalized, "NATIONALITE"),
+          str(normalized, "RELATION"),
+          str(normalized, "CODEFAM"),
+          str(normalized, "CODESOC"),
+          str(normalized, "CONTRAT"),
+          str(normalized, "ASSURANCE"),
+          str(normalized, "COVID"),
+          str(normalized, "LOCATION"),
+          str(normalized, "SOURCE"),
+          fingerprint);
+      default -> {
+        // no-op
+      }
+    }
+  }
+
+  private static String str(Map<String, Object> map, String key) {
+    Object v = map.get(key);
+    if (v == null) {
+      return null;
+    }
+    String text = String.valueOf(v).trim();
+    return text.isEmpty() || "null".equalsIgnoreCase(text) ? null : text;
+  }
+
+  private static String first(Map<String, Object> map, String... keys) {
+    for (String key : keys) {
+      String v = str(map, key);
+      if (v != null) {
+        return v;
+      }
+    }
+    return null;
+  }
+
+  private static BigDecimal decimal(Map<String, Object> map, String key) {
+    Object v = map.get(key);
+    if (v == null) {
+      return BigDecimal.ZERO;
+    }
+    if (v instanceof BigDecimal bd) {
+      return bd;
+    }
+    if (v instanceof Number number) {
+      return BigDecimal.valueOf(number.doubleValue());
+    }
+    try {
+      return new BigDecimal(String.valueOf(v).trim());
+    } catch (NumberFormatException ex) {
+      return BigDecimal.ZERO;
+    }
+  }
+
+  private static Long longOrNull(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof Number number) {
+      return number.longValue();
+    }
+    try {
+      return Long.parseLong(String.valueOf(raw).trim());
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
+  private static LocalDate localDate(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof LocalDate ld) {
+      return ld;
+    }
+    String text = String.valueOf(raw).trim();
+    if (text.length() >= 10) {
+      try {
+        return LocalDate.parse(text.substring(0, 10));
+      } catch (Exception ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   private static String supervisionState(

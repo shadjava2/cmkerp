@@ -1,0 +1,23 @@
+---
+description: Standard relationnel ERP — tables métier, FK, sélecteurs
+alwaysApply: true
+---
+
+# ERP RELATIONAL DATA STANDARD — MANDATORY
+
+CMK ERP possède son **propre modèle métier relationnel**. CLINIQUE est un système historique compatible, pas le moteur de données interne.
+
+## Principes
+
+1. **Tables métier dédiées** (`erp_*`) — pas d’EAV / JSON comme unique source de vérité.
+2. **`erp_clinic_referentials`** = pont temporaire / registre technique uniquement ; migration vers tables typées obligatoire.
+3. **PK interne BIGINT** + **code historique** conservé (zéros initiaux, collation).
+4. **FK MySQL** vers les parents ERP rapprochés ; codes historiques en colonnes `legacy_*` pour réplication.
+5. **Index** sur FK, codes, recherche (nom, matricule…).
+6. **Montants** = `DECIMAL` / `BigDecimal` — jamais FLOAT/DOUBLE.
+7. **API** = id + code + **libellé métier** résolus côté serveur (pas de N+1 navigateur).
+8. **Formulaires** = sélecteurs (ComboBox / async / dialog) — pas de saisie libre de clés étrangères.
+9. **Référentiels existants** (utilisateurs, pharmacies, produits, sites) = **mapping**, pas de duplication.
+10. **Relations orphelines** = consultables + signalées — jamais inventées.
+11. **Réplication** = résolution des codes historiques **côté serveur** uniquement.
+12. Jointures métier **backend** ; pagination serveur pour volumes élevés.

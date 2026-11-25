@@ -1,6 +1,6 @@
 # AGENTS.md — CMK ERP
 
-## Quatre standards architecturaux permanents
+## Six standards architecturaux permanents
 
 | Standard | Fichier | Responsabilité |
 | --- | --- | --- |
@@ -8,6 +8,8 @@
 | CMK Design System | `.cursor/rules/cmk-design-system.mdc` | Cohérence visuelle et ergonomique |
 | CLINIQUE Legacy Protection | `.cursor/rules/clinic-legacy-protection.mdc` | Intégrité des bases historiques SQL Server |
 | Production Release | `.cursor/rules/production-release-standard.mdc` | Qualité produit, UI métier, zéro prototypage |
+| Bidirectional Synchronization | `.cursor/rules/clinic-bidirectional-sync.mdc` | Outbox, réplication, rapprochement |
+| ERP Relational Data | `.cursor/rules/erp-relational-data-standard.mdc` | Tables métier, FK, libellés, sélecteurs |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
 
