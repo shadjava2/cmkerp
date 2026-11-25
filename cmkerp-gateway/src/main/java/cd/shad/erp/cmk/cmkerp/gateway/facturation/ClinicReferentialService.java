@@ -1,6 +1,7 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -810,64 +811,184 @@ public class ClinicReferentialService {
   /** Miroir idempotent vers les tables métier — sans outbox Beach. */
   private void mirrorRelationalImport(
       Definition def, String naturalKey, Map<String, Object> normalized, String fingerprint) {
-    if (!relationalStore.supports(def.code())) {
-      return;
-    }
+    // Historique facturation / stock : tables typées même si supports() est false (pas de CRUD générique).
     switch (def.code()) {
-      case "SERVICES" -> relationalStore.upsertServiceFromImport(
-          naturalKey, str(normalized, "LIBELLE"), fingerprint);
-      case "IMPUTATIONS" -> relationalStore.upsertImputationFromImport(
-          naturalKey, first(normalized, "DESIGNATION", "LIBELLE"), fingerprint);
-      case "LOCATIONS" -> relationalStore.upsertLocationFromImport(
-          naturalKey,
-          first(normalized, "LIBELLE", "DESIGNATION"),
-          str(normalized, "ADRESSE"),
-          longOrNull(normalized.get("siteId")),
-          fingerprint);
-      case "MEDECINS" -> relationalStore.upsertMedecinFromImport(
-          naturalKey, first(normalized, "NOM", "NOMMED", "DESIGNATION"), fingerprint);
-      case "SOCIETES" -> relationalStore.upsertSocieteFromImport(
-          naturalKey,
-          str(normalized, "NOMSOC"),
-          str(normalized, "ADRESSE"),
-          str(normalized, "N_IMPOT"),
-          str(normalized, "NRC"),
-          str(normalized, "ID_NAT"),
-          str(normalized, "CONTRAT"),
-          fingerprint);
-      case "CLASSES" -> relationalStore.upsertClasseFromImport(
-          naturalKey, first(normalized, "LIBELLE", "DESIGNATION"), str(normalized, "SERVICE"), fingerprint);
-      case "TARIFS" -> relationalStore.upsertTarifFromImport(
-          naturalKey,
-          str(normalized, "LIBPRES"),
-          str(normalized, "CODESERV"),
-          str(normalized, "CLASSE"),
-          str(normalized, "IMPUTATION"),
-          decimal(normalized, "MONTANT"),
-          decimal(normalized, "MONTPRIVE"),
-          fingerprint);
-      case "AYANTS_DROIT" -> relationalStore.upsertAyantFromImport(
-          naturalKey,
-          str(normalized, "NOM"),
-          str(normalized, "SEXE"),
-          localDate(normalized.get("DATENAIS")),
-          str(normalized, "NATIONALITE"),
-          str(normalized, "RELATION"),
-          str(normalized, "CODEFAM"),
-          str(normalized, "CODESOC"),
-          str(normalized, "CONTRAT"),
-          str(normalized, "ASSURANCE"),
-          str(normalized, "COVID"),
-          str(normalized, "LOCATION"),
-          str(normalized, "SOURCE"),
-          fingerprint,
-          first(normalized, "medilineIpp", "MEDILINE_IPP"),
-          longOrNull(normalized.get("medilinePatientId") != null
-              ? normalized.get("medilinePatientId")
-              : normalized.get("MEDILINE_PATIENT_ID")));
+      case "PRESTATIONS" -> mirrorPrestationHistory(naturalKey, normalized, fingerprint);
+      case "MEDICAMENTS" -> mirrorMedicamentHistory(naturalKey, normalized, fingerprint);
+      case "STOCK" -> mirrorStockHistory(naturalKey, normalized, fingerprint);
       default -> {
-        // no-op
+        if (!relationalStore.supports(def.code())) {
+          return;
+        }
+        switch (def.code()) {
+          case "SERVICES" -> relationalStore.upsertServiceFromImport(
+              naturalKey, str(normalized, "LIBELLE"), fingerprint);
+          case "IMPUTATIONS" -> relationalStore.upsertImputationFromImport(
+              naturalKey, first(normalized, "DESIGNATION", "LIBELLE"), fingerprint);
+          case "LOCATIONS" -> relationalStore.upsertLocationFromImport(
+              naturalKey,
+              first(normalized, "LIBELLE", "DESIGNATION"),
+              str(normalized, "ADRESSE"),
+              longOrNull(normalized.get("siteId")),
+              fingerprint);
+          case "MEDECINS" -> relationalStore.upsertMedecinFromImport(
+              naturalKey, first(normalized, "NOM", "NOMMED", "DESIGNATION"), fingerprint);
+          case "SOCIETES" -> relationalStore.upsertSocieteFromImport(
+              naturalKey,
+              str(normalized, "NOMSOC"),
+              str(normalized, "ADRESSE"),
+              str(normalized, "N_IMPOT"),
+              str(normalized, "NRC"),
+              str(normalized, "ID_NAT"),
+              str(normalized, "CONTRAT"),
+              fingerprint);
+          case "CLASSES" -> relationalStore.upsertClasseFromImport(
+              naturalKey, first(normalized, "LIBELLE", "DESIGNATION"), str(normalized, "SERVICE"), fingerprint);
+          case "TARIFS" -> relationalStore.upsertTarifFromImport(
+              naturalKey,
+              str(normalized, "LIBPRES"),
+              str(normalized, "CODESERV"),
+              str(normalized, "CLASSE"),
+              str(normalized, "IMPUTATION"),
+              decimal(normalized, "MONTANT"),
+              decimal(normalized, "MONTPRIVE"),
+              fingerprint);
+          case "AYANTS_DROIT" -> relationalStore.upsertAyantFromImport(
+              naturalKey,
+              str(normalized, "NOM"),
+              str(normalized, "SEXE"),
+              localDate(normalized.get("DATENAIS")),
+              str(normalized, "NATIONALITE"),
+              str(normalized, "RELATION"),
+              str(normalized, "CODEFAM"),
+              str(normalized, "CODESOC"),
+              str(normalized, "CONTRAT"),
+              str(normalized, "ASSURANCE"),
+              str(normalized, "COVID"),
+              str(normalized, "LOCATION"),
+              str(normalized, "SOURCE"),
+              fingerprint,
+              first(normalized, "medilineIpp", "MEDILINE_IPP"),
+              longOrNull(normalized.get("medilinePatientId") != null
+                  ? normalized.get("medilinePatientId")
+                  : normalized.get("MEDILINE_PATIENT_ID")));
+          default -> {
+            // no-op
+          }
+        }
       }
+    }
+  }
+
+  private void mirrorPrestationHistory(String naturalKey, Map<String, Object> row, String fingerprint) {
+    String matricule = str(row, "MATRICULE");
+    String tarifCode = str(row, "CODEPRES");
+    String medCode = str(row, "CODEMED");
+    relationalStore.upsertPrestationHistory(
+        naturalKey,
+        naturalKey,
+        relationalStore.findAyantIdByMatricule(matricule),
+        matricule,
+        relationalStore.findSocieteId(str(row, "CODESOC")),
+        relationalStore.findContratId(str(row, "CONTRASOC")),
+        relationalStore.findTarifIdByCode(tarifCode),
+        tarifCode,
+        relationalStore.findServiceId(str(row, "CODESERV")),
+        relationalStore.findImputationId(str(row, "IMPUTATION")),
+        relationalStore.findMedecinId(medCode),
+        medCode,
+        relationalStore.findLocationId(str(row, "LOCATION")),
+        decimal(row, "MONTANT"),
+        timestampOf(row.get("DATEPRES")),
+        writeJson(row),
+        fingerprint);
+  }
+
+  private void mirrorMedicamentHistory(String naturalKey, Map<String, Object> row, String fingerprint) {
+    String matricule = str(row, "MATRICULE");
+    String productCode = str(row, "CODEPROD");
+    String pharmacyCode = str(row, "CODEPHARM");
+    String medCode = str(row, "CODEMED");
+    relationalStore.upsertMedicamentHistory(
+        naturalKey,
+        relationalStore.findAyantIdByMatricule(matricule),
+        matricule,
+        relationalStore.findSocieteId(str(row, "CODESOC")),
+        relationalStore.findContratId(str(row, "CONTRASOC")),
+        relationalStore.findProductIdByLegacyCode(productCode),
+        productCode,
+        relationalStore.findMedecinId(medCode),
+        medCode,
+        relationalStore.findPharmacyIdByLegacyCode(pharmacyCode),
+        pharmacyCode,
+        relationalStore.findServiceId(str(row, "CODESERV")),
+        relationalStore.findLocationId(str(row, "LOCATION")),
+        decimal(row, "QTE"),
+        decimal(row, "MONTANT"),
+        timestampOf(row.get("DATEMVT")),
+        writeJson(row),
+        fingerprint);
+  }
+
+  private void mirrorStockHistory(String naturalKey, Map<String, Object> row, String fingerprint) {
+    Long productId = relationalStore.findProductIdByLegacyCode(naturalKey);
+    for (int n = 1; n <= 20; n++) {
+      BigDecimal qty = decimalNullable(row, "STOCK" + n);
+      if (qty == null || qty.compareTo(BigDecimal.ZERO) == 0) {
+        continue;
+      }
+      String compartment = "STOCK" + n;
+      relationalStore.upsertStockCompartment(
+          naturalKey,
+          productId,
+          compartment,
+          qty,
+          fingerprint + ":" + compartment);
+    }
+  }
+
+  private static BigDecimal decimalNullable(Map<String, Object> map, String key) {
+    Object v = map.get(key);
+    if (v == null) {
+      return null;
+    }
+    if (v instanceof BigDecimal bd) {
+      return bd;
+    }
+    if (v instanceof Number number) {
+      return BigDecimal.valueOf(number.doubleValue());
+    }
+    String text = String.valueOf(v).trim();
+    if (text.isEmpty() || "null".equalsIgnoreCase(text)) {
+      return null;
+    }
+    try {
+      return new BigDecimal(text);
+    } catch (NumberFormatException ex) {
+      return null;
+    }
+  }
+
+  private static Timestamp timestampOf(Object raw) {
+    if (raw == null) {
+      return null;
+    }
+    if (raw instanceof Timestamp ts) {
+      return ts;
+    }
+    if (raw instanceof java.util.Date d) {
+      return new Timestamp(d.getTime());
+    }
+    String text = String.valueOf(raw).trim().replace('T', ' ');
+    if (text.length() == 10) {
+      text = text + " 00:00:00";
+    } else if (text.length() > 19) {
+      text = text.substring(0, 19);
+    }
+    try {
+      return Timestamp.valueOf(text);
+    } catch (IllegalArgumentException ex) {
+      return null;
     }
   }
 
