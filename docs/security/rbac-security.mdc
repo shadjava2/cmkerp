@@ -19,6 +19,7 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 8. **Tous les points d'entrée** vers une fonctionnalité (bouton, menu, carte, lien, route URL, raccourci clavier, API) doivent exiger la **même** permission — aucun accès alternatif ne doit contourner une restriction.
 9. **Raccourcis clavier** (`Ctrl+K`, etc.) sont soumis au RBAC : absents / inactifs si la permission manque.
 10. **UI adaptative** : un conteneur fonctionnel sans enfant visible (section, grille, groupe de boutons, onglets, titre + liste) doit être **masqué intégralement** (titre, séparateurs, marges). Les restrictions RBAC ne doivent pas laisser de coquilles vides ni dégrader l'organisation visuelle.
+11. **Nouveau module = intégration réelle.** Une migration ou un seed dans le dépôt ne suffit pas. Preuves obligatoires sur la base cible du gateway : `MODULE_*` en table `permissions`, ADMIN synchronisé, carte portail visible après reconnexion, route accessible, branche admin visible, utilisateur non autorisé sans carte. Interdit de forcer l'affichage via exception ADMIN / hardcode. Build PASS ≠ disponibilité fonctionnelle.
 
 ## Definition of Done — nouvelle fonctionnalité
 
@@ -33,6 +34,8 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 - [ ] Route frontend protégée
 - [ ] Endpoint / service backend sécurisé
 - [ ] Révocation session prise en charge (403 + invalidation cache)
+- [ ] Preuve SQL live (permission + ADMIN) si environnement autorisé
+- [ ] Preuve UI live (carte / route) après refresh session
 - [ ] Tests d'autorisation
 - [ ] Documentation RBAC actualisée
 

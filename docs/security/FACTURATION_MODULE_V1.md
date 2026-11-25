@@ -24,7 +24,19 @@ Les mêmes écrans restent accessibles sous Stock (`/stock-mouvements/facturatio
 - `MODULE_FACTURATION` — accès portail uniquement (deny-by-default sur les circuits)
 - `SIDEBAR_FACTURATION_ACCUEIL` — menu Accueil
 
-Aucune attribution automatique hors ADMIN (trigger / `syncAdmin`).
+Aucune attribution automatique hors ADMIN (trigger `trg_permissions_after_insert_sync_admin` / `syncAdmin`).
+
+## Application sur la base cible (obligatoire si Flyway off)
+
+```powershell
+cd C:\Users\HP\Videos\STSDEV\cmkerp
+git pull
+.\scripts\apply-rbac-v28-facturation.ps1
+.\stop-gateway.ps1 -Force
+.\run-gateway.ps1 -KillPort
+```
+
+Puis déconnexion / reconnexion ADMIN. Preuve SQL attendue : `MODULE_FACTURATION` et `SIDEBAR_FACTURATION_ACCUEIL` avec `acces_admin = AUTORISE`.
 
 ## Backlog (non opérationnel)
 
