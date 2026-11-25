@@ -113,8 +113,26 @@ public class ConsommationServiceAnalyticsRepository {
 
   public List<Map<String, Object>> statsProduits(
       Long pharmacieId, LocalDate from, LocalDate to, String q, int limit) {
+    return statsProduits(pharmacieId, from, to, q, limit, "quantite");
+  }
+
+  /**
+   * @param sortBy {@code quantite} (défaut pilotage) ou {@code montant} (facturation privée+contrat)
+   */
+  public List<Map<String, Object>> statsProduits(
+      Long pharmacieId, LocalDate from, LocalDate to, String q, int limit, String sortBy) {
     Map<String, Object> params = baseParams(pharmacieId, from, to, q);
     params.put("limit", Math.min(Math.max(limit, 1), 500));
+    boolean byMontant = sortBy != null && sortBy.equalsIgnoreCase("montant");
+    String orderBy =
+        byMontant
+            ? """
+              ORDER BY (
+                COALESCE(SUM(CASE WHEN v.statut = 'PAYEE' THEN COALESCE(lv.qt, 0) * COALESCE(lv.prixventes, 0) ELSE 0 END), 0)
+                + COALESCE(SUM(CASE WHEN v.statut = 'FACTUREE' THEN COALESCE(lv.qt, 0) * COALESCE(lv.prixventes, 0) ELSE 0 END), 0)
+              ) DESC
+              """
+            : "ORDER BY quantite_totale DESC";
     String sql =
         """
         SELECT
@@ -138,7 +156,9 @@ public class ConsommationServiceAnalyticsRepository {
             + produitFilter(params)
             + """
             GROUP BY p.id
-            ORDER BY quantite_totale DESC
+            """
+            + orderBy
+            + """
             LIMIT :limit
             """;
     return jdbc.queryForList(sql, params);

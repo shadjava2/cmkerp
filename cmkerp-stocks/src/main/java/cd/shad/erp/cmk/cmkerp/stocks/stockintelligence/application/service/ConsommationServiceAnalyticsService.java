@@ -44,7 +44,12 @@ public class ConsommationServiceAnalyticsService {
 
   public List<Map<String, Object>> statsProduits(
       Long pharmacieId, LocalDate from, LocalDate to, String q, int limit) {
-    return repository.statsProduits(pharmacieId, from, to, q, limit);
+    return statsProduits(pharmacieId, from, to, q, limit, "quantite");
+  }
+
+  public List<Map<String, Object>> statsProduits(
+      Long pharmacieId, LocalDate from, LocalDate to, String q, int limit, String sortBy) {
+    return repository.statsProduits(pharmacieId, from, to, q, limit, sortBy);
   }
 
   /**

@@ -56,8 +56,9 @@ public class ConsommationServiceAnalyticsRestController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) String q,
-      @RequestParam(defaultValue = "200") int limit) {
-    return ResponseEntity.ok(require().statsProduits(pharmacieId, from, to, q, limit));
+      @RequestParam(defaultValue = "200") int limit,
+      @RequestParam(defaultValue = "quantite") String sortBy) {
+    return ResponseEntity.ok(require().statsProduits(pharmacieId, from, to, q, limit, sortBy));
   }
 
   @GetMapping("/stats/produits-mensuel")
