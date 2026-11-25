@@ -112,6 +112,84 @@ public class FacturationContratController {
     return ResponseEntity.ok(service.prepareSuspendedIntentions(userId));
   }
 
+  @GetMapping("/clinic-sync/snapshot")
+  public ResponseEntity<Map<String, Object>> syncSnapshot() {
+    return ResponseEntity.ok(service.syncSnapshot());
+  }
+
+  @GetMapping("/clinic-sync/config")
+  public ResponseEntity<Map<String, Object>> syncConfig() {
+    return ResponseEntity.ok(service.syncConfig());
+  }
+
+  @GetMapping("/clinic-sync/history")
+  public ResponseEntity<Map<String, Object>> syncHistory(
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) String entityType,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return ResponseEntity.ok(service.syncHistory(status, entityType, q, page, size));
+  }
+
+  @PostMapping("/clinic-sync/outbound/apply")
+  public ResponseEntity<Map<String, Object>> applyOutbound(
+      @RequestBody Map<String, Object> body, HttpServletRequest request) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
+    return ResponseEntity.ok(service.applyOutbound(stringList(body.get("codes")), userId));
+  }
+
+  @PostMapping("/clinic-sync/inbound/apply")
+  public ResponseEntity<Map<String, Object>> applyInbound(@RequestBody Map<String, Object> body) {
+    return ResponseEntity.ok(service.applyInbound(stringList(body.get("codes"))));
+  }
+
+  @PostMapping("/clinic-sync/inbound/run")
+  public ResponseEntity<Map<String, Object>> runInbound() {
+    return ResponseEntity.ok(service.runInboundNow());
+  }
+
+  @PostMapping("/clinic-sync/divergences/resolve")
+  public ResponseEntity<Map<String, Object>> resolveDivergences(
+      @RequestBody Map<String, Object> body, HttpServletRequest request) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
+    return ResponseEntity.ok(service.resolveDivergences(mapList(body.get("items")), userId));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<String> stringList(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    java.util.ArrayList<String> out = new java.util.ArrayList<>();
+    for (Object o : list) {
+      if (o != null) {
+        out.add(String.valueOf(o));
+      }
+    }
+    return out;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static List<Map<String, Object>> mapList(Object raw) {
+    if (!(raw instanceof List<?> list)) {
+      return List.of();
+    }
+    java.util.ArrayList<Map<String, Object>> out = new java.util.ArrayList<>();
+    for (Object o : list) {
+      if (o instanceof Map<?, ?> m) {
+        Map<String, Object> row = new java.util.LinkedHashMap<>();
+        m.forEach((k, v) -> {
+          if (k != null) {
+            row.put(String.valueOf(k), v);
+          }
+        });
+        out.add(row);
+      }
+    }
+    return out;
+  }
+
   private static String stringVal(Object o) {
     return o == null ? null : String.valueOf(o);
   }

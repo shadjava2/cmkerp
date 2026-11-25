@@ -349,12 +349,80 @@ public class ErpContratRepository {
     jdbc.update(
         """
             UPDATE erp_sync_outbox
-            SET status = 'FAILED', last_error = ?, next_attempt_at = DATE_ADD(NOW(), INTERVAL (attempt_count * 2) MINUTE),
+            SET status = 'FAILED', last_error = ?, next_attempt_at = DATE_ADD(NOW(), INTERVAL LEAST(attempt_count * 2, 60) MINUTE),
                 dateupdate = NOW()
             WHERE id = ?
             """,
         error == null ? null : (error.length() > 900 ? error.substring(0, 900) : error),
         id);
+  }
+
+  public void markOutboxUncertain(long id, String error) {
+    jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'UNCERTAIN', last_error = ?, dateupdate = NOW()
+            WHERE id = ?
+            """,
+        error == null ? null : (error.length() > 900 ? error.substring(0, 900) : error),
+        id);
+  }
+
+  public void markOutboxConflict(long id, String error) {
+    jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'CONFLICT', last_error = ?, next_attempt_at = NULL, dateupdate = NOW()
+            WHERE id = ?
+            """,
+        error == null ? null : (error.length() > 900 ? error.substring(0, 900) : error),
+        id);
+  }
+
+  public int reclaimStuckInProgress(int stuckMinutes) {
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'UNCERTAIN',
+                last_error = COALESCE(last_error, 'Reprise après interruption worker'),
+                dateupdate = NOW()
+            WHERE status = 'IN_PROGRESS'
+              AND dateupdate < DATE_SUB(NOW(), INTERVAL ? MINUTE)
+            """,
+        Math.max(stuckMinutes, 1));
+  }
+
+  public int requeueFailedReady(int maxAttempts) {
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'PENDING', dateupdate = NOW()
+            WHERE status = 'FAILED'
+              AND attempt_count < ?
+              AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
+            """,
+        Math.max(maxAttempts, 1));
+  }
+
+  public int promoteSuspendedToPendingForEntity(String entityType) {
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'PENDING', dateupdate = NOW()
+            WHERE status = 'SUSPENDED' AND entity_type = ?
+            """,
+        entityType);
+  }
+
+  public Optional<String> findBeachDesignationVerified(JdbcTemplate cliniqueJdbc, String code) {
+    if (cliniqueJdbc == null) {
+      return Optional.empty();
+    }
+    var list = cliniqueJdbc.query(
+        "SELECT RTRIM(DESIGNATION) AS DESIGNATION FROM dbo.TCONTRAT WHERE RTRIM(CODE) = ?",
+        (rs, i) -> rs.getString("DESIGNATION") == null ? "" : rs.getString("DESIGNATION").trim(),
+        code);
+    return list.stream().findFirst();
   }
 
   public void markContratSynced(long id, String legacyCode) {
@@ -368,11 +436,122 @@ public class ErpContratRepository {
         id);
   }
 
+  public void markContratSyncedWithFingerprint(long id, String legacyCode, String fingerprint) {
+    jdbc.update(
+        """
+            UPDATE erp_contrats
+            SET sync_status = 'SYNCED', legacy_code = ?, sync_fingerprint = ?,
+                last_synced_at = NOW(), dateupdate = NOW()
+            WHERE id = ?
+            """,
+        legacyCode,
+        fingerprint,
+        id);
+  }
+
+  public void updateDesignationFromInbound(long id, String designation, String fingerprint, String syncStatus) {
+    jdbc.update(
+        """
+            UPDATE erp_contrats
+            SET designation = ?, sync_fingerprint = ?, sync_status = ?, legacy_code = code,
+                last_synced_at = NOW(), dateupdate = NOW(), version = version + 1
+            WHERE id = ?
+            """,
+        trimTo(designation, 50),
+        fingerprint,
+        syncStatus,
+        id);
+  }
+
+  public void updateFingerprint(long id, String fingerprint) {
+    jdbc.update(
+        "UPDATE erp_contrats SET sync_fingerprint = ?, dateupdate = NOW() WHERE id = ?",
+        fingerprint,
+        id);
+  }
+
+  public Optional<String> findFingerprint(long id) {
+    var list = jdbc.query(
+        "SELECT sync_fingerprint FROM erp_contrats WHERE id = ?",
+        (rs, i) -> rs.getString(1),
+        id);
+    return list.stream().findFirst().map(v -> v == null ? null : v.trim());
+  }
+
   public void updateSyncStatus(long id, String syncStatus) {
     jdbc.update(
         "UPDATE erp_contrats SET sync_status = ?, dateupdate = NOW() WHERE id = ?",
         syncStatus,
         id);
+  }
+
+  public long countOutboxHistory(String status, String entityType, String q) {
+    StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM erp_sync_outbox WHERE 1=1");
+    var args = new java.util.ArrayList<Object>();
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND status = ?");
+      args.add(status);
+    }
+    if (entityType != null && !entityType.isBlank()) {
+      sql.append(" AND entity_type = ?");
+      args.add(entityType);
+    }
+    if (q != null && !q.isBlank()) {
+      sql.append(" AND (legacy_key LIKE ? OR operation_id LIKE ? OR last_error LIKE ?)");
+      String like = "%" + q.trim() + "%";
+      args.add(like);
+      args.add(like);
+      args.add(like);
+    }
+    Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+    return n == null ? 0 : n;
+  }
+
+  public List<Map<String, Object>> listOutboxHistory(
+      String status, String entityType, String q, int limit, int offset) {
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT id, operation_id, entity_type, entity_id, legacy_key, operation_type, status,
+                   attempt_count, last_error, correlation_id, datecreate, datesynced, dateupdate
+            FROM erp_sync_outbox WHERE 1=1
+            """);
+    var args = new java.util.ArrayList<Object>();
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND status = ?");
+      args.add(status);
+    }
+    if (entityType != null && !entityType.isBlank()) {
+      sql.append(" AND entity_type = ?");
+      args.add(entityType);
+    }
+    if (q != null && !q.isBlank()) {
+      sql.append(" AND (legacy_key LIKE ? OR operation_id LIKE ? OR last_error LIKE ?)");
+      String like = "%" + q.trim() + "%";
+      args.add(like);
+      args.add(like);
+      args.add(like);
+    }
+    sql.append(" ORDER BY id DESC LIMIT ? OFFSET ?");
+    args.add(Math.min(Math.max(limit, 1), 200));
+    args.add(Math.max(offset, 0));
+    return jdbc.query(sql.toString(), (rs, i) -> {
+      Map<String, Object> row = new java.util.LinkedHashMap<>();
+      row.put("id", rs.getLong("id"));
+      row.put("operationId", rs.getString("operation_id"));
+      row.put("entityType", rs.getString("entity_type"));
+      row.put("entityId", rs.getObject("entity_id"));
+      row.put("legacyKey", rs.getString("legacy_key"));
+      row.put("operationType", rs.getString("operation_type"));
+      row.put("direction", "ERP_TO_CLINIQUE");
+      row.put("status", rs.getString("status"));
+      row.put("attemptCount", rs.getInt("attempt_count"));
+      row.put("lastError", rs.getString("last_error"));
+      row.put("correlationId", rs.getString("correlation_id"));
+      row.put("createdAt", rs.getTimestamp("datecreate"));
+      row.put("syncedAt", rs.getTimestamp("datesynced"));
+      row.put("updatedAt", rs.getTimestamp("dateupdate"));
+      return row;
+    }, args.toArray());
   }
 
   static String normalizeCode(String code) {

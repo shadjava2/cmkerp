@@ -11,7 +11,14 @@ clinic:
   beach:
     sync-enabled: ${CLINIC_BEACH_SYNC_ENABLED:false}
     write-enabled: ${CLINIC_BEACH_WRITE_ENABLED:false}
+    write-entities: ${CLINIC_BEACH_WRITE_ENTITIES:TCONTRAT}
     delete-enabled: ${CLINIC_BEACH_DELETE_ENABLED:false}
+    inbound-enabled: ${CLINIC_BEACH_INBOUND_ENABLED:false}
+    inbound-interval-ms: ${CLINIC_BEACH_INBOUND_INTERVAL_MS:60000}
+    sync-interval-ms: ${CLINIC_BEACH_SYNC_INTERVAL_MS:15000}
+    max-attempts: ${CLINIC_BEACH_MAX_ATTEMPTS:8}
+    stuck-minutes: ${CLINIC_BEACH_STUCK_MINUTES:10}
+    exclude-codes: ${CLINIC_BEACH_EXCLUDE_CODES:TES}
   ch:
     write-enabled: ${CLINIC_CH_WRITE_ENABLED:false}
 

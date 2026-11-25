@@ -21,6 +21,7 @@ public class ErpContratService {
   private final ErpContratRepository repository;
   private final ClinicContratLegacyReader legacyReader;
   private final ClinicReferentialService referentialService;
+  private final ClinicContratSyncEngine syncEngine;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
 
@@ -28,11 +29,13 @@ public class ErpContratService {
       ErpContratRepository repository,
       ClinicContratLegacyReader legacyReader,
       ClinicReferentialService referentialService,
+      ClinicContratSyncEngine syncEngine,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.legacyReader = legacyReader;
     this.referentialService = referentialService;
+    this.syncEngine = syncEngine;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
   }
@@ -64,9 +67,10 @@ public class ErpContratService {
     if (repository.findByCode(normalized).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Code contrat déjà existant: " + normalized);
     }
-    // Intention de réplication toujours journalisée (SUSPENDED si écritures Beach off).
-    String syncStatus = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
+    // Intention toujours journalisée (SUSPENDED si écriture TCONTRAT off).
+    String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     long id = repository.insert(normalized, designation, true, "OPERATION_ERP", null, syncStatus, userId);
+    repository.updateFingerprint(id, ClinicContratFingerprint.of(normalized, designation));
     enqueueReplication(id, normalized, designation, "INSERT", userId);
     return get(id);
   }
@@ -84,8 +88,9 @@ public class ErpContratService {
     }
     String op = current.legacyCode() != null ? "UPDATE" : "INSERT";
     enqueueReplication(id, current.code(), designation, op, userId);
-    String syncStatus = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
+    String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     repository.updateSyncStatus(id, syncStatus);
+    repository.updateFingerprint(id, ClinicContratFingerprint.of(current.code(), designation));
     return get(id);
   }
 
@@ -283,9 +288,13 @@ public class ErpContratService {
     Map<String, Object> status = new HashMap<>();
     status.put("beachAvailable", legacyReader.available());
     status.put("beachWriteEnabled", writeGuard.beachWriteEnabled());
+    status.put("beachTcontratWriteEnabled", writeGuard.beachEntityWriteEnabled("TCONTRAT"));
     status.put("beachSyncEnabled", writeGuard.beachSyncEnabled());
+    status.put("beachInboundEnabled", writeGuard.beachInboundEnabled());
     status.put("beachDeleteEnabled", writeGuard.beachDeleteEnabled());
     status.put("chWriteEnabled", writeGuard.chWriteEnabled());
+    status.put("excludeCodes", List.copyOf(writeGuard.properties().getBeach().excludeCodeSet()));
+    status.put("syncConfig", syncEngine.config());
     status.put("erpContrats", repository.count(null, null));
     status.put("outboxPending", repository.countOutboxByStatus("PENDING"));
     status.put("outboxSuspended", repository.countOutboxByStatus("SUSPENDED"));
@@ -354,22 +363,44 @@ public class ErpContratService {
   }
 
   /**
-   * Prépare les intentions manquantes pour les contrats ERP-only (ex. créés avant correction Outbox).
+   * Prépare les intentions manquantes pour les contrats ERP-only.
+   * Exclut les codes de test ({@code clinic.beach.exclude-codes}, défaut TES).
    */
   @Transactional
   public Map<String, Object> prepareSuspendedIntentions(Long userId) {
-    int prepared = 0;
-    int skipped = 0;
-    for (ErpContratRecord row : repository.listBySourceSystem("OPERATION_ERP")) {
-      if (repository.hasOpenOutbox(row.id(), "TCONTRAT")) {
-        skipped++;
-        continue;
-      }
-      enqueueReplication(row.id(), row.code(), row.designation(), "INSERT", userId);
-      repository.updateSyncStatus(row.id(), writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED");
-      prepared++;
-    }
-    return Map.of("prepared", prepared, "skipped", skipped);
+    return syncEngine.prepareMissingIntentions(userId, false);
+  }
+
+  public Map<String, Object> syncSnapshot() {
+    return syncEngine.snapshot();
+  }
+
+  public Map<String, Object> syncConfig() {
+    return syncEngine.config();
+  }
+
+  public Map<String, Object> syncHistory(String status, String entityType, String q, int page, int size) {
+    return syncEngine.history(status, entityType, q, page, size);
+  }
+
+  @Transactional
+  public Map<String, Object> applyOutbound(List<String> codes, Long userId) {
+    return syncEngine.applyOutbound(codes, userId);
+  }
+
+  @Transactional
+  public Map<String, Object> applyInbound(List<String> codes) {
+    return syncEngine.applyInbound(codes);
+  }
+
+  @Transactional
+  public Map<String, Object> resolveDivergences(List<Map<String, Object>> items, Long userId) {
+    return syncEngine.resolveDivergences(items, userId);
+  }
+
+  @Transactional
+  public Map<String, Object> runInboundNow() {
+    return syncEngine.runInboundReconcile(true);
   }
 
   private List<Map<String, Object>> listReferentialsSummary(
@@ -404,7 +435,7 @@ public class ErpContratService {
     if (repository.hasOpenOutbox(id, "TCONTRAT")) {
       return;
     }
-    String status = writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED";
+    String status = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     try {
       Map<String, Object> payload = new HashMap<>();
       payload.put("code", code);
@@ -412,6 +443,7 @@ public class ErpContratService {
       payload.put("operation", op);
       payload.put("userId", userId == null ? 0 : userId);
       payload.put("columns", List.of("CODE", "DESIGNATION"));
+      payload.put("fingerprint", ClinicContratFingerprint.of(code, designation));
       repository.enqueueOutbox(
           UUID.randomUUID().toString(),
           "TCONTRAT",

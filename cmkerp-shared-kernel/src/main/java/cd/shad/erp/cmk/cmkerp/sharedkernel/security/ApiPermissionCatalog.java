@@ -159,6 +159,14 @@ public final class ApiPermissionCatalog {
         "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION", "FACTURATION_SYNC_HISTORY_VIEW");
     rule("POST", "/api/v1/facturation/clinic-sync/outbox/prepare",
         "FACTURATION_SYNC_RETRY", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/clinic-sync/outbound/apply",
+        "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/clinic-sync/inbound/apply",
+        "FACTURATION_SYNC_IMPORT", "FACTURATION_CONTRATS_IMPORT");
+    rule("POST", "/api/v1/facturation/clinic-sync/inbound/run",
+        "FACTURATION_SYNC_IMPORT", "FACTURATION_SYNC_RETRY");
+    rule("POST", "/api/v1/facturation/clinic-sync/divergences/resolve",
+        "FACTURATION_SYNC_CONFLICT_RESOLVE", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/clinic-sync",
         "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_CONFLICT_RESOLVE", "FACTURATION_SYNC_IMPORT");
     registerClinicReferentials();

@@ -20,7 +20,20 @@ public class ClinicLegacyWriteGuard {
     if (!properties.getBeach().isWriteEnabled()) {
       throw new ResponseStatusException(
           HttpStatus.SERVICE_UNAVAILABLE,
-          "Écriture CLINIQUE Beach désactivée (clinic.beach.write.enabled=false). Opération: " + operation);
+          "Écriture CLINIQUE Beach désactivée (clinic.beach.write-enabled=false). Opération: " + operation);
+    }
+  }
+
+  /**
+   * Vérifie write-enabled global + allow-list d'entités (ex. TCONTRAT uniquement).
+   */
+  public void assertBeachEntityWriteAllowed(String entityType, String operation) {
+    assertBeachWriteAllowed(operation);
+    if (!properties.getBeach().isEntityWriteAllowed(entityType)) {
+      throw new ResponseStatusException(
+          HttpStatus.FORBIDDEN,
+          "Écriture Beach interdite pour l'entité " + entityType + " (clinic.beach.write-entities). Opération: "
+              + operation);
     }
   }
 
@@ -35,7 +48,6 @@ public class ClinicLegacyWriteGuard {
 
   public void assertChWriteForbidden() {
     if (properties.getCh().isWriteEnabled()) {
-      // même si un flag malveillant est activé dans une config non validée, bloquer par défaut métier migration
       throw new ResponseStatusException(
           HttpStatus.FORBIDDEN,
           "Les écritures CLINIQUE CH sont hors périmètre de cette migration.");
@@ -46,8 +58,16 @@ public class ClinicLegacyWriteGuard {
     return properties.getBeach().isWriteEnabled();
   }
 
+  public boolean beachEntityWriteEnabled(String entityType) {
+    return properties.getBeach().isEntityWriteAllowed(entityType);
+  }
+
   public boolean beachSyncEnabled() {
     return properties.getBeach().isSyncEnabled();
+  }
+
+  public boolean beachInboundEnabled() {
+    return properties.getBeach().isInboundEnabled();
   }
 
   public boolean beachDeleteEnabled() {
@@ -56,5 +76,9 @@ public class ClinicLegacyWriteGuard {
 
   public boolean chWriteEnabled() {
     return properties.getCh().isWriteEnabled();
+  }
+
+  public ClinicLegacySyncProperties properties() {
+    return properties;
   }
 }
