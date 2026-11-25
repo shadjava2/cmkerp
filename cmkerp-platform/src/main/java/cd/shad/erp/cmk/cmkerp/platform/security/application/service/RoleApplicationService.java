@@ -240,9 +240,21 @@ public class RoleApplicationService {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toCollection(HashSet::new));
 
+        // Délégation : un opérateur ne peut attribuer que des permissions qu'il possède.
+        // Un compte synchronisé avec le catalogue complet (ADMIN) peut tout déléguer.
+        Set<String> actorPermissions = permissionAuthorization.getEffectivePermissions(currentUserId);
+        int catalogSize = permissionRepository.findAll().size();
+        boolean mayDelegateAll = catalogSize > 0 && actorPermissions.size() >= catalogSize;
+
         for (Long permissionId : desired) {
-            permissionRepository.findById(permissionId)
+            Permission permission = permissionRepository.findById(permissionId)
                     .orElseThrow(() -> NotFoundException.entity("Permission", permissionId));
+            if (!mayDelegateAll && !actorPermissions.contains(permission.getNom())) {
+                throw new BusinessException(
+                        "PERMISSION_DELEGATION_DENIED",
+                        "Vous ne pouvez pas déléguer la permission " + permission.getNom()
+                                + " que vous ne possédez pas.");
+            }
         }
 
         List<RolePermission> existing = rolePermissionRepository.findByRole(roleId);

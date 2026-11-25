@@ -89,11 +89,17 @@ public final class ApiPermissionCatalog {
     rule("GET", "/api/v1/consultations", "CONSULTER_CONSULTATION", "DMI_CABINET_PATIENT_VIEW",
         "SIDEBAR_CABINET", "MODULE_DMI");
     rule("POST", "/api/v1/consultations", "CREER_CONSULTATION", "DMI_CABINET_CONSULTATION_CREATE",
-        "SIDEBAR_CABINET", "MODULE_DMI");
+        "DMI_CABINET_PRISE_EN_CHARGE_CREATE", "SIDEBAR_CABINET", "MODULE_DMI");
     rule("PUT", "/api/v1/consultations", "MODIFIER_CONSULTATION", "DMI_CABINET_CONSULTATION_CREATE",
         "MODULE_DMI");
-    rule("*", "/api/v1/consultations", "CONSULTER_CONSULTATION", "MODULE_DMI", "SIDEBAR_CABINET");
-    rule("*", "/api/v1/mediline", "MODULE_DMI", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW");
+    rule("*", "/api/v1/consultations", "CONSULTER_CONSULTATION", "DMI_CABINET_PATIENT_VIEW",
+        "DMI_CABINET_REGISTRE_CONSULTATIONS_VIEW", "MODULE_DMI", "SIDEBAR_CABINET");
+    rule("POST", "/api/v1/cardex", "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER",
+        "DMI_CARDEX_NOUVEAU_DOSSIER", "SIDEBAR_RECEPTION", "SIDEBAR_CARDEX", "MODULE_DMI");
+    rule("GET", "/api/v1/cardex", "DMI_CARDEX_VIEW", "DMI_CABINET_FICHE_OPEN",
+        "DMI_CABINET_FILE_ACTIVE_VIEW", "SIDEBAR_CARDEX", "SIDEBAR_CABINET", "MODULE_DMI");
+    rule("*", "/api/v1/mediline", "MODULE_DMI", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW",
+        "DMI_RECEPTION_PATIENT_VIEW");
     rule("*", "/api/v1/cardex", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW", "MODULE_DMI");
 
     // --- Administration / sécurité ---

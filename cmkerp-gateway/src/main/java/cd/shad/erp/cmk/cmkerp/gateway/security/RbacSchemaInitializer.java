@@ -1,12 +1,16 @@
 package cd.shad.erp.cmk.cmkerp.gateway.security;
 
+import java.sql.Connection;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.SystemRoleConstants;
@@ -40,10 +44,13 @@ public class RbacSchemaInitializer implements ApplicationRunner {
       ensureUniqueRolePermission();
       seedCatalog();
       seedPhase2Granular();
+      seedPhase3AdminConsole();
+      seedFunctionalCatalogSql();
       syncAdmin();
       ensureAdminProtectTrigger();
       ensurePermissionFkCascade();
-      log.info("RBAC : schéma hiérarchique vérifié / synchronisé");
+      Integer total = jdbc.queryForObject("SELECT COUNT(*) FROM permissions", Integer.class);
+      log.info("RBAC : schéma hiérarchique vérifié / synchronisé — {} permissions en catalogue", total);
     } catch (Exception ex) {
       log.warn("RBAC : initialisation partielle — {}", ex.getMessage());
     }
@@ -193,6 +200,55 @@ public class RbacSchemaInitializer implements ApplicationRunner {
       jdbc.update(
           "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,?,NOW(),NOW())",
           row[0], row[1], parentId);
+    }
+  }
+
+  /** Permissions de gouvernance de la console Administration (V26). */
+  private void seedPhase3AdminConsole() {
+    String[][] rows = {
+        {"ADMIN_ROLES_VIEW", "Consulter les rôles", "MODULE_ADMINISTRATION"},
+        {"ADMIN_ROLES_CREATE", "Créer un rôle métier", "MODULE_ADMINISTRATION"},
+        {"ADMIN_ROLES_UPDATE", "Modifier un rôle métier", "MODULE_ADMINISTRATION"},
+        {"ADMIN_ROLES_DELETE", "Supprimer un rôle métier", "MODULE_ADMINISTRATION"},
+        {"ADMIN_ROLES_DUPLICATE", "Dupliquer un rôle métier", "MODULE_ADMINISTRATION"},
+        {"ADMIN_ROLES_PERMISSIONS_UPDATE", "Modifier les permissions d'un rôle", "MODULE_ADMINISTRATION"},
+        {"ADMIN_PERMISSIONS_CATALOG_VIEW", "Consulter le catalogue des permissions", "MODULE_ADMINISTRATION"},
+        {"ADMIN_USERS_ROLE_ASSIGN", "Attribuer un rôle à un utilisateur", "MODULE_ADMINISTRATION"},
+        {"ADMIN_USERS_PERMISSIONS_VIEW", "Consulter les permissions effectives d'un utilisateur", "MODULE_ADMINISTRATION"},
+        {"ADMIN_RBAC_AUDIT_VIEW", "Consulter l'audit des modifications de droits", "MODULE_ADMINISTRATION"},
+        {"ADMIN_RBAC_INTEGRITY_VIEW", "Vérifier l'intégrité du rôle ADMIN", "MODULE_ADMINISTRATION"},
+        {"ADMIN_RBAC_INTEGRITY_REPAIR", "Réparer la synchronisation ADMIN", "MODULE_ADMINISTRATION"},
+    };
+    for (String[] row : rows) {
+      if (findPermissionId(row[0]) != null) {
+        continue;
+      }
+      Long parentId = findPermissionId(row[2]);
+      if (parentId == null) {
+        continue;
+      }
+      jdbc.update(
+          "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,?,NOW(),NOW())",
+          row[0], row[1], parentId);
+    }
+  }
+
+  /**
+   * Applique le catalogue fonctionnel exhaustif (V27) lorsque Flyway est désactivé.
+   * Idempotent : INSERT … WHERE NOT EXISTS.
+   */
+  private void seedFunctionalCatalogSql() {
+    ClassPathResource resource =
+        new ClassPathResource("db/migration/V27__rbac_functional_catalog_exhaustive.sql");
+    if (!resource.exists()) {
+      log.warn("RBAC : V27 catalogue fonctionnel introuvable sur le classpath");
+      return;
+    }
+    try (Connection connection = jdbc.getDataSource().getConnection()) {
+      ScriptUtils.executeSqlScript(connection, resource);
+      log.info("RBAC : catalogue fonctionnel V27 appliqué / vérifié");
+    } catch (Exception ex) {
+      log.warn("RBAC : échec application V27 — {}", ex.getMessage());
     }
   }
 

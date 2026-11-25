@@ -56,15 +56,17 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Ventes / sorties | `STOCK_VENTE_*` | OK | OK | OK |
 | Reports | `STOCK_REPORT_EXPORT` | OK | OK | OK |
 
-## 5. Administration
+## 5. Administration (console)
 
-| Capacité | Permission | Endpoint | UI | État |
-| --- | --- | --- | --- | --- |
-| Gérer rôles | `ADMIN_ROLES_MANAGE` | `PUT /roles/{id}/permissions` | `/administration/roles` | OK |
-| Historique droits | `ADMIN_ROLES_MANAGE` | `GET /roles/{id}/permission-audit` | section historique | OK |
-| Intégrité ADMIN | `ADMIN_ROLES_MANAGE` | `GET /rbac/admin/integrity` | — | OK |
-| Réparer ADMIN | `ADMIN_ROLES_MANAGE` | `POST /rbac/admin/repair-permissions` | — | OK |
-| Usage events | `ADMIN_USAGE_VIEW` | `/usage-events` | UsageHistory | OK |
+| Capacité | Permission | Endpoint / route | État |
+| --- | --- | --- | --- |
+| Utilisateurs ERP | `ADMIN_USERS_*` | `/administration/utilisateurs` | OK |
+| Rôles & permissions | `ADMIN_ROLES_*` / `ADMIN_ROLES_MANAGE` | `/administration/roles` | OK |
+| Catalogue permissions | `ADMIN_PERMISSIONS_CATALOG_VIEW` | `/administration/permissions-catalog` | OK |
+| Audit des accès | `ADMIN_RBAC_AUDIT_VIEW` | `/administration/rbac-audit` | OK |
+| Intégrité RBAC | `ADMIN_RBAC_INTEGRITY_*` | `/administration/rbac-integrity` | OK |
+| Autorisations opérations | `STOCK_AUTORISATION_DECIDE` | `/administration/autorisations` | OK (distinct du RBAC) |
+| Usage events | `ADMIN_USAGE_VIEW` | `/administration/usage` | OK |
 
 ## 6. Hardcodes (éliminés)
 

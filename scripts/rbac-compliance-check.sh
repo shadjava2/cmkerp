@@ -65,10 +65,17 @@ test -f "$WS/.cursor/rules/rbac-security.mdc"
 test -f "$WS/AGENTS.md"
 echo "OK: règles permanentes présentes"
 
-# 5. Migrations V24/V25
+# 5. Migrations V24–V27 + seed autonome
 test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V24__rbac_hierarchical_standard.sql"
 test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V25__rbac_phase2_full_catalog.sql"
-echo "OK: migrations V24/V25 présentes"
+test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V26__rbac_admin_console_permissions.sql"
+test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V27__rbac_functional_catalog_exhaustive.sql"
+test -f "$ROOT/scripts/rbac-seed-full-catalog.sql"
+# Contrôle statique : permissions fonctionnelles déclarées dans le seed
+grep -q "DMI_CABINET_PRISE_EN_CHARGE_CREATE" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+grep -q "DMI_ACCUEIL_NOUVEAU_DOSSIER" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+grep -q "STOCK_PRODUIT_CREATE" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+echo "OK: migrations V24–V27 + seed fonctionnel présentes"
 
 # 6. Matrice de couverture
 if [ -f "$WS/docs/security/RBAC_COVERAGE_MATRIX.md" ] || [ -f "$ROOT/docs/security/RBAC_COVERAGE_MATRIX.md" ]; then
