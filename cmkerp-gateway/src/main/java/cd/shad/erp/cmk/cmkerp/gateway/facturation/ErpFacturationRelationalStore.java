@@ -790,7 +790,7 @@ public class ErpFacturationRelationalStore {
     return list.stream().findFirst().orElse(null);
   }
 
-  private Long findServiceId(String code) {
+  public Long findServiceId(String code) {
     String c = trim(code);
     if (c == null || c.isBlank()) {
       return null;
@@ -808,7 +808,7 @@ public class ErpFacturationRelationalStore {
     return list.stream().findFirst().orElse(null);
   }
 
-  private Long findImputationId(String code) {
+  public Long findImputationId(String code) {
     String c = trim(code);
     if (c == null || c.isBlank()) {
       return null;
@@ -817,7 +817,7 @@ public class ErpFacturationRelationalStore {
     return list.stream().findFirst().orElse(null);
   }
 
-  private Long findLocationId(String code) {
+  public Long findLocationId(String code) {
     String c = trim(code);
     if (c == null || c.isBlank()) {
       return null;
@@ -1525,9 +1525,449 @@ public class ErpFacturationRelationalStore {
             "label", rs.getString("label") == null ? "Non rapproché" : rs.getString("label"),
             "count", rs.getLong("cnt"),
             "montant", rs.getBigDecimal("montant"))));
+    out.put("patientsReview", scalar(
+        "SELECT COUNT(*) FROM erp_ayants_droit WHERE patient_link_status IN ('REVIEW','AMBIGUOUS')"));
+    out.put("patientsConflict", scalar(
+        "SELECT COUNT(*) FROM erp_ayants_droit WHERE patient_link_status = 'CONFLICT'"));
+    out.put("prestationsImported", scalar(
+        "SELECT COUNT(*) FROM erp_facturation_prestations WHERE actif = 1 AND source_system = 'CLINIQUE_BEACH'"
+            + dateFilterPrest, argsP.toArray()));
+    out.put("prestationsErpLocal", scalar(
+        "SELECT COUNT(*) FROM erp_facturation_prestations WHERE actif = 1 AND source_system = 'OPERATION_ERP'"
+            + dateFilterPrest, argsP.toArray()));
+    out.put("medicamentsImported", scalar(
+        "SELECT COUNT(*) FROM erp_facturation_medicaments WHERE actif = 1 AND source_system = 'CLINIQUE_BEACH'"
+            + dateFilterMed, argsM.toArray()));
+    out.put("medicamentsErpLocal", scalar(
+        "SELECT COUNT(*) FROM erp_facturation_medicaments WHERE actif = 1 AND source_system = 'OPERATION_ERP'"
+            + dateFilterMed, argsM.toArray()));
+    out.put("stockCompartments", scalar("SELECT COUNT(*) FROM erp_stock_clinique"));
+    out.put("stockMappedCompartments", scalar(
+        "SELECT COUNT(*) FROM erp_stock_compartment_mappings WHERE mapping_status = 'MAPPED' AND actif = 1"));
+    out.put("coveragePrestations", jdbc.queryForMap(
+        """
+            SELECT MIN(DATE(date_prestation)) AS minDate, MAX(DATE(date_prestation)) AS maxDate
+            FROM erp_facturation_prestations WHERE actif = 1 AND date_prestation IS NOT NULL
+            """));
+    out.put("coverageMedicaments", jdbc.queryForMap(
+        """
+            SELECT MIN(DATE(date_mouvement)) AS minDate, MAX(DATE(date_mouvement)) AS maxDate
+            FROM erp_facturation_medicaments WHERE actif = 1 AND date_mouvement IS NOT NULL
+            """));
+    out.put("byContratPrestations", jdbc.query(
+        """
+            SELECT COALESCE(c.designation, c.code, p.fk_contrat) AS label,
+                   COUNT(*) AS cnt, COALESCE(SUM(p.montant),0) AS montant
+            FROM erp_facturation_prestations p
+            LEFT JOIN erp_contrats c ON c.id = p.fk_contrat
+            WHERE p.actif = 1
+            GROUP BY COALESCE(c.designation, c.code, p.fk_contrat)
+            ORDER BY montant DESC
+            LIMIT 10
+            """,
+        (rs, i) -> Map.of(
+            "label", rs.getString("label") == null ? "Non rapproché" : String.valueOf(rs.getString("label")),
+            "count", rs.getLong("cnt"),
+            "montant", rs.getBigDecimal("montant"))));
+    out.put("byMedecinPrestations", jdbc.query(
+        """
+            SELECT COALESCE(m.nom, p.legacy_medecin_code) AS label,
+                   COUNT(*) AS cnt, COALESCE(SUM(p.montant),0) AS montant
+            FROM erp_facturation_prestations p
+            LEFT JOIN erp_medecins m ON m.id = p.fk_medecin
+            WHERE p.actif = 1
+            GROUP BY COALESCE(m.nom, p.legacy_medecin_code)
+            ORDER BY montant DESC
+            LIMIT 10
+            """,
+        (rs, i) -> Map.of(
+            "label", rs.getString("label") == null ? "Non rapproché" : rs.getString("label"),
+            "count", rs.getLong("cnt"),
+            "montant", rs.getBigDecimal("montant"))));
+    out.put("byPharmacyMedicaments", jdbc.query(
+        """
+            SELECT COALESCE(ph.designation, m.legacy_pharmacy_code) AS label,
+                   COUNT(*) AS cnt, COALESCE(SUM(m.montant),0) AS montant
+            FROM erp_facturation_medicaments m
+            LEFT JOIN pharmacies ph ON ph.id = m.fk_pharmacy
+            WHERE m.actif = 1
+            GROUP BY COALESCE(ph.designation, m.legacy_pharmacy_code)
+            ORDER BY montant DESC
+            LIMIT 10
+            """,
+        (rs, i) -> Map.of(
+            "label", rs.getString("label") == null ? "Non rapproché" : rs.getString("label"),
+            "count", rs.getLong("cnt"),
+            "montant", rs.getBigDecimal("montant"))));
+    out.put("monthlyEvolution", jdbc.query(
+        """
+            SELECT periode, SUM(prest_montant) AS prestationsMontant, SUM(med_montant) AS medicamentsMontant,
+                   SUM(prest_cnt) AS prestationsCount, SUM(med_cnt) AS medicamentsCount
+            FROM (
+              SELECT DATE_FORMAT(date_prestation, '%Y-%m') AS periode,
+                     COALESCE(SUM(montant),0) AS prest_montant, COUNT(*) AS prest_cnt,
+                     0 AS med_montant, 0 AS med_cnt
+              FROM erp_facturation_prestations WHERE actif = 1 AND date_prestation IS NOT NULL
+              GROUP BY DATE_FORMAT(date_prestation, '%Y-%m')
+              UNION ALL
+              SELECT DATE_FORMAT(date_mouvement, '%Y-%m') AS periode,
+                     0, 0, COALESCE(SUM(montant),0), COUNT(*)
+              FROM erp_facturation_medicaments WHERE actif = 1 AND date_mouvement IS NOT NULL
+              GROUP BY DATE_FORMAT(date_mouvement, '%Y-%m')
+            ) x
+            GROUP BY periode
+            ORDER BY periode DESC
+            LIMIT 24
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("periode", rs.getString("periode"));
+          row.put("prestationsMontant", rs.getBigDecimal("prestationsMontant"));
+          row.put("medicamentsMontant", rs.getBigDecimal("medicamentsMontant"));
+          row.put("prestationsCount", rs.getLong("prestationsCount"));
+          row.put("medicamentsCount", rs.getLong("medicamentsCount"));
+          return row;
+        }));
+    out.put("amountDisclaimer",
+        "Montants = transactions enregistrées / importées. Ne pas interpréter comme encaissements.");
     out.put("sourceOfTruth", "erp_relational_tables");
     out.put("referentialsBridge", "erp_clinic_referentials (import/compat only)");
     return out;
+  }
+
+  public Long findMedecinId(String code) {
+    String c = trim(code);
+    if (c == null || c.isBlank()) {
+      return null;
+    }
+    var list = jdbc.query("SELECT id FROM erp_medecins WHERE code = ?", (rs, i) -> rs.getLong(1), c);
+    return list.stream().findFirst().orElse(null);
+  }
+
+  public Long findAyantIdByMatricule(String matricule) {
+    String c = trim(matricule);
+    if (c == null || c.isBlank()) {
+      return null;
+    }
+    var list = jdbc.query(
+        "SELECT id FROM erp_ayants_droit WHERE matricule = ? ORDER BY id LIMIT 1",
+        (rs, i) -> rs.getLong(1),
+        c);
+    return list.stream().findFirst().orElse(null);
+  }
+
+  public Long findProductIdByLegacyCode(String legacyCode) {
+    String c = trim(legacyCode);
+    if (c == null || c.isBlank()) {
+      return null;
+    }
+    var mapped = jdbc.query(
+        """
+            SELECT erp_product_id FROM erp_product_external_mappings
+            WHERE legacy_product_code = ? AND erp_product_id IS NOT NULL
+            ORDER BY id LIMIT 1
+            """,
+        (rs, i) -> rs.getLong(1),
+        c);
+    if (!mapped.isEmpty()) {
+      return mapped.get(0);
+    }
+    var byClinic = jdbc.query(
+        "SELECT id FROM produits WHERE CODECLINIQUE = ? OR CODE = ? LIMIT 1",
+        (rs, i) -> rs.getLong(1),
+        c,
+        c);
+    return byClinic.stream().findFirst().orElse(null);
+  }
+
+  public Long findPharmacyIdByLegacyCode(String legacyCode) {
+    String c = trim(legacyCode);
+    if (c == null || c.isBlank()) {
+      return null;
+    }
+    var mapped = jdbc.query(
+        """
+            SELECT erp_pharmacy_id FROM erp_pharmacy_external_mappings
+            WHERE legacy_pharmacy_code = ? AND erp_pharmacy_id IS NOT NULL
+            ORDER BY id LIMIT 1
+            """,
+        (rs, i) -> rs.getLong(1),
+        c);
+    return mapped.stream().findFirst().orElse(null);
+  }
+
+  public Long findTarifIdByCode(String code) {
+    String c = trim(code);
+    if (c == null || c.isBlank()) {
+      return null;
+    }
+    var list = jdbc.query("SELECT id FROM erp_tarifs WHERE code = ?", (rs, i) -> rs.getLong(1), c);
+    return list.stream().findFirst().orElse(null);
+  }
+
+  public int upsertPrestationHistory(
+      String legacyId,
+      String idmvt,
+      Long ayantId,
+      String matricule,
+      Long societeId,
+      Long contratId,
+      Long tarifId,
+      String tarifCode,
+      Long serviceId,
+      Long imputationId,
+      Long medecinId,
+      String medecinCode,
+      Long locationId,
+      BigDecimal montant,
+      Timestamp datePrestation,
+      String snapshotJson,
+      String fingerprint) {
+    return jdbc.update(
+        """
+            INSERT INTO erp_facturation_prestations
+              (legacy_id, operation_id, legacy_idmvt, fk_ayant_droit, legacy_matricule, fk_societe, fk_contrat,
+               fk_tarif, legacy_tarif_code, fk_service, fk_imputation, fk_medecin, legacy_medecin_code,
+               fk_location, montant, date_prestation, payload_snapshot_json, actif, source_system,
+               sync_status, sync_fingerprint, last_synced_at, version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'CLINIQUE_BEACH', 'SYNCED', ?, NOW(), 1)
+            ON DUPLICATE KEY UPDATE
+              legacy_idmvt = VALUES(legacy_idmvt),
+              fk_ayant_droit = COALESCE(VALUES(fk_ayant_droit), fk_ayant_droit),
+              legacy_matricule = COALESCE(VALUES(legacy_matricule), legacy_matricule),
+              fk_societe = COALESCE(VALUES(fk_societe), fk_societe),
+              fk_contrat = COALESCE(VALUES(fk_contrat), fk_contrat),
+              fk_tarif = COALESCE(VALUES(fk_tarif), fk_tarif),
+              legacy_tarif_code = COALESCE(VALUES(legacy_tarif_code), legacy_tarif_code),
+              fk_service = COALESCE(VALUES(fk_service), fk_service),
+              fk_imputation = COALESCE(VALUES(fk_imputation), fk_imputation),
+              fk_medecin = COALESCE(VALUES(fk_medecin), fk_medecin),
+              legacy_medecin_code = COALESCE(VALUES(legacy_medecin_code), legacy_medecin_code),
+              fk_location = COALESCE(VALUES(fk_location), fk_location),
+              montant = VALUES(montant),
+              date_prestation = VALUES(date_prestation),
+              payload_snapshot_json = VALUES(payload_snapshot_json),
+              sync_fingerprint = VALUES(sync_fingerprint),
+              last_synced_at = NOW(),
+              version = version + 1
+            """,
+        legacyId,
+        "HIST-PREST-" + legacyId,
+        idmvt,
+        ayantId,
+        matricule,
+        societeId,
+        contratId,
+        tarifId,
+        tarifCode,
+        serviceId,
+        imputationId,
+        medecinId,
+        medecinCode,
+        locationId,
+        montant == null ? BigDecimal.ZERO : montant,
+        datePrestation,
+        snapshotJson,
+        fingerprint);
+  }
+
+  public int upsertMedicamentHistory(
+      String legacyId,
+      Long ayantId,
+      String matricule,
+      Long societeId,
+      Long contratId,
+      Long productId,
+      String productCode,
+      Long medecinId,
+      String medecinCode,
+      Long pharmacyId,
+      String pharmacyCode,
+      Long serviceId,
+      Long locationId,
+      BigDecimal quantite,
+      BigDecimal montant,
+      Timestamp dateMouvement,
+      String snapshotJson,
+      String fingerprint) {
+    return jdbc.update(
+        """
+            INSERT INTO erp_facturation_medicaments
+              (legacy_id, operation_id, fk_ayant_droit, legacy_matricule, fk_societe, fk_contrat,
+               fk_product, legacy_product_code, fk_medecin, legacy_medecin_code, fk_pharmacy,
+               legacy_pharmacy_code, fk_service, fk_location, quantite, montant, date_mouvement,
+               payload_snapshot_json, actif, source_system, sync_status, sync_fingerprint,
+               last_synced_at, version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'CLINIQUE_BEACH', 'SYNCED', ?, NOW(), 1)
+            ON DUPLICATE KEY UPDATE
+              fk_ayant_droit = COALESCE(VALUES(fk_ayant_droit), fk_ayant_droit),
+              legacy_matricule = COALESCE(VALUES(legacy_matricule), legacy_matricule),
+              fk_societe = COALESCE(VALUES(fk_societe), fk_societe),
+              fk_contrat = COALESCE(VALUES(fk_contrat), fk_contrat),
+              fk_product = COALESCE(VALUES(fk_product), fk_product),
+              legacy_product_code = COALESCE(VALUES(legacy_product_code), legacy_product_code),
+              fk_medecin = COALESCE(VALUES(fk_medecin), fk_medecin),
+              legacy_medecin_code = COALESCE(VALUES(legacy_medecin_code), legacy_medecin_code),
+              fk_pharmacy = COALESCE(VALUES(fk_pharmacy), fk_pharmacy),
+              legacy_pharmacy_code = COALESCE(VALUES(legacy_pharmacy_code), legacy_pharmacy_code),
+              fk_service = COALESCE(VALUES(fk_service), fk_service),
+              fk_location = COALESCE(VALUES(fk_location), fk_location),
+              quantite = VALUES(quantite),
+              montant = VALUES(montant),
+              date_mouvement = VALUES(date_mouvement),
+              payload_snapshot_json = VALUES(payload_snapshot_json),
+              sync_fingerprint = VALUES(sync_fingerprint),
+              last_synced_at = NOW(),
+              version = version + 1
+            """,
+        legacyId,
+        "HIST-MED-" + legacyId,
+        ayantId,
+        matricule,
+        societeId,
+        contratId,
+        productId,
+        productCode,
+        medecinId,
+        medecinCode,
+        pharmacyId,
+        pharmacyCode,
+        serviceId,
+        locationId,
+        quantite == null ? BigDecimal.ZERO : quantite,
+        montant == null ? BigDecimal.ZERO : montant,
+        dateMouvement,
+        snapshotJson,
+        fingerprint);
+  }
+
+  public int upsertStockCompartment(
+      String productCode, Long productId, String compartment, BigDecimal qty, String fingerprint) {
+    return jdbc.update(
+        """
+            INSERT INTO erp_stock_clinique
+              (legacy_product_code, fk_product, compartment_code, quantity, source_system,
+               sync_status, sync_fingerprint, last_synced_at, version)
+            VALUES (?, ?, ?, ?, 'CLINIQUE_BEACH', 'SYNCED', ?, NOW(), 1)
+            ON DUPLICATE KEY UPDATE
+              fk_product = COALESCE(VALUES(fk_product), fk_product),
+              quantity = VALUES(quantity),
+              sync_fingerprint = VALUES(sync_fingerprint),
+              last_synced_at = NOW(),
+              version = version + 1
+            """,
+        productCode,
+        productId,
+        compartment,
+        qty == null ? BigDecimal.ZERO : qty,
+        fingerprint);
+  }
+
+  public List<Map<String, Object>> listAyantsForMatch(String status, int limit, int offset) {
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT id, matricule, nom_complet, date_naissance, mediline_ipp, mediline_patient_id,
+                   patient_link_status
+            FROM erp_ayants_droit
+            WHERE actif = 1
+            """);
+    List<Object> args = new ArrayList<>();
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND patient_link_status = ?");
+      args.add(status.trim().toUpperCase(Locale.ROOT));
+    }
+    sql.append(" ORDER BY id LIMIT ? OFFSET ?");
+    args.add(Math.min(Math.max(limit, 1), 2000));
+    args.add(Math.max(offset, 0));
+    return jdbc.query(sql.toString(), (rs, i) -> {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", rs.getLong("id"));
+      row.put("matricule", rs.getString("matricule"));
+      row.put("nomComplet", rs.getString("nom_complet"));
+      row.put("dateNaissance", rs.getObject("date_naissance"));
+      row.put("medilineIpp", rs.getString("mediline_ipp"));
+      row.put("medilinePatientId", rs.getObject("mediline_patient_id"));
+      row.put("patientLinkStatus", rs.getString("patient_link_status"));
+      return row;
+    }, args.toArray());
+  }
+
+  public long countAyantsForMatch(String status) {
+    if (status == null || status.isBlank()) {
+      return scalar("SELECT COUNT(*) FROM erp_ayants_droit WHERE actif = 1");
+    }
+    return scalar(
+        "SELECT COUNT(*) FROM erp_ayants_droit WHERE actif = 1 AND patient_link_status = ?",
+        status.trim().toUpperCase(Locale.ROOT));
+  }
+
+  public int applyPatientLink(long ayantId, String ipp, Long medilinePatientId, String status) {
+    String st = status == null || status.isBlank() ? "LINKED" : status.trim().toUpperCase(Locale.ROOT);
+    return jdbc.update(
+        """
+            UPDATE erp_ayants_droit
+            SET mediline_ipp = ?, mediline_patient_id = ?, patient_link_status = ?,
+                dateupdate = NOW(), version = version + 1
+            WHERE id = ?
+            """,
+        ipp,
+        medilinePatientId,
+        st,
+        ayantId);
+  }
+
+  public Map<String, Long> patientLinkCounters() {
+    Map<String, Long> out = new LinkedHashMap<>();
+    jdbc.query(
+        """
+            SELECT patient_link_status AS st, COUNT(*) AS cnt
+            FROM erp_ayants_droit WHERE actif = 1
+            GROUP BY patient_link_status
+            """,
+        (rs, i) -> {
+          out.put(rs.getString("st") == null ? "UNLINKED" : rs.getString("st"), rs.getLong("cnt"));
+          return null;
+        });
+    return out;
+  }
+
+  public List<Map<String, Object>> listStockCompartmentMappings() {
+    return jdbc.query(
+        """
+            SELECT m.id, m.compartment_code, m.legacy_label, m.fk_pharmacy, m.fk_location,
+                   m.mapping_status, m.notes, m.actif, p.designation AS pharmacy_label
+            FROM erp_stock_compartment_mappings m
+            LEFT JOIN pharmacies p ON p.id = m.fk_pharmacy
+            WHERE m.actif = 1
+            ORDER BY m.compartment_code
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("id", rs.getLong("id"));
+          row.put("compartmentCode", rs.getString("compartment_code"));
+          row.put("legacyLabel", rs.getString("legacy_label"));
+          row.put("pharmacyId", rs.getObject("fk_pharmacy"));
+          row.put("locationId", rs.getObject("fk_location"));
+          row.put("mappingStatus", rs.getString("mapping_status"));
+          row.put("notes", rs.getString("notes"));
+          row.put("pharmacyLabel", rs.getString("pharmacy_label"));
+          return row;
+        });
+  }
+
+  public int bindStockCompartment(long id, Long pharmacyId, Long locationId, String notes) {
+    String status = pharmacyId == null && locationId == null ? "UNMAPPED" : "MAPPED";
+    return jdbc.update(
+        """
+            UPDATE erp_stock_compartment_mappings
+            SET fk_pharmacy = ?, fk_location = ?, mapping_status = ?, notes = ?, dateupdate = NOW()
+            WHERE id = ?
+            """,
+        pharmacyId,
+        locationId,
+        status,
+        notes,
+        id);
   }
 
   private long scalar(String sql, Object... args) {

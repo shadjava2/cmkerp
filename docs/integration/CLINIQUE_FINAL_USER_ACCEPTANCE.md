@@ -1,8 +1,10 @@
 # CMK ERP — Recette utilisateur finale Facturation V1
 
-Date : **2026-11-25**  
+Date : **2026-11-26**  
 Objectif : checklist **écran par écran** pour validation personnelle (0/19).  
 Référence technique : `CLINIQUE_MIGRATION_MASTER_REPORT.md`
+
+Données pré-chargées pour la recette : **29 100** ayants liés Mediline · **2 500** prestations importées · **1 500** médicaments importés · **7 951** lignes stock compartiments. Import exhaustif Beach encore progressif via API.
 
 ### Légende risque données
 

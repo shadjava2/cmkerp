@@ -40,16 +40,19 @@ public class FacturationRelationalController {
   private final JwtTokenProvider jwtTokenProvider;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
+  private final FacturationDataConsolidationService consolidation;
 
   public FacturationRelationalController(
       ErpFacturationRelationalStore store,
       JwtTokenProvider jwtTokenProvider,
       ClinicLegacyWriteGuard writeGuard,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      FacturationDataConsolidationService consolidation) {
     this.store = store;
     this.jwtTokenProvider = jwtTokenProvider;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
+    this.consolidation = consolidation;
   }
 
   @GetMapping("/dashboard/snapshot")
@@ -57,6 +60,111 @@ public class FacturationRelationalController {
       @RequestParam(required = false) String from,
       @RequestParam(required = false) String to) {
     return ResponseEntity.ok(store.dashboardSnapshot(from, to));
+  }
+
+  @GetMapping("/patients/match/stats")
+  public ResponseEntity<Map<String, Object>> patientMatchStats() {
+    return ResponseEntity.ok(consolidation.patientMatchStats());
+  }
+
+  @GetMapping("/patients/match/exceptions")
+  public ResponseEntity<Map<String, Object>> patientMatchExceptions(
+      @RequestParam(required = false, defaultValue = "REVIEW") String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return ResponseEntity.ok(consolidation.listPatientExceptions(status, page, size));
+  }
+
+  @PostMapping("/patients/match/run")
+  public ResponseEntity<Map<String, Object>> runPatientMatch(
+      @RequestBody(required = false) Map<String, Object> body) {
+    int batchSize = body != null && body.get("batchSize") != null
+        ? Integer.parseInt(String.valueOf(body.get("batchSize")))
+        : 500;
+    int maxBatches = body != null && body.get("maxBatches") != null
+        ? Integer.parseInt(String.valueOf(body.get("maxBatches")))
+        : 20;
+    return ResponseEntity.ok(consolidation.runPatientAutoMatch(batchSize, maxBatches));
+  }
+
+  @PutMapping("/patients/match/{ayantId}")
+  public ResponseEntity<Map<String, Object>> confirmPatientMatch(
+      @PathVariable long ayantId, @RequestBody Map<String, Object> body) {
+    String ipp = body.get("medilineIpp") == null ? null : String.valueOf(body.get("medilineIpp"));
+    Long medilinePatientId = body.get("medilinePatientId") == null
+        ? null
+        : Long.valueOf(String.valueOf(body.get("medilinePatientId")));
+    return ResponseEntity.ok(consolidation.confirmPatientLink(ayantId, ipp, medilinePatientId));
+  }
+
+  @PostMapping("/history/prestations/import")
+  public ResponseEntity<Map<String, Object>> importHistoricalPrestations(
+      @RequestBody(required = false) Map<String, Object> body) {
+    return ResponseEntity.ok(consolidation.importHistoricalPrestations(
+        str(body, "from"),
+        str(body, "to"),
+        intOr(body, "limit", 200),
+        intOr(body, "offset", 0)));
+  }
+
+  @PostMapping("/history/medicaments/import")
+  public ResponseEntity<Map<String, Object>> importHistoricalMedicaments(
+      @RequestBody(required = false) Map<String, Object> body) {
+    return ResponseEntity.ok(consolidation.importHistoricalMedicaments(
+        str(body, "from"),
+        str(body, "to"),
+        intOr(body, "limit", 200),
+        intOr(body, "offset", 0)));
+  }
+
+  @PostMapping("/history/stock/import")
+  public ResponseEntity<Map<String, Object>> importHistoricalStock(
+      @RequestBody(required = false) Map<String, Object> body) {
+    return ResponseEntity.ok(consolidation.importHistoricalStock(
+        intOr(body, "limit", 200),
+        intOr(body, "offset", 0)));
+  }
+
+  @GetMapping("/stock/compartments")
+  public ResponseEntity<Map<String, Object>> stockCompartments() {
+    return ResponseEntity.ok(Map.of("items", consolidation.stockCompartmentMappings()));
+  }
+
+  @PutMapping("/stock/compartments/{id}")
+  public ResponseEntity<Map<String, Object>> bindStockCompartment(
+      @PathVariable long id, @RequestBody Map<String, Object> body) {
+    Long pharmacyId = body.get("pharmacyId") == null
+        ? null
+        : Long.valueOf(String.valueOf(body.get("pharmacyId")));
+    Long locationId = body.get("locationId") == null
+        ? null
+        : Long.valueOf(String.valueOf(body.get("locationId")));
+    String notes = body.get("notes") == null ? null : String.valueOf(body.get("notes"));
+    return ResponseEntity.ok(consolidation.bindStockCompartment(id, pharmacyId, locationId, notes));
+  }
+
+  @GetMapping("/adapters/outbound")
+  public ResponseEntity<Map<String, Object>> outboundAdapters() {
+    return ResponseEntity.ok(consolidation.outboundAdaptersInventory());
+  }
+
+  private static String str(Map<String, Object> body, String key) {
+    if (body == null || body.get(key) == null) {
+      return null;
+    }
+    String v = String.valueOf(body.get(key)).trim();
+    return v.isEmpty() || "null".equalsIgnoreCase(v) ? null : v;
+  }
+
+  private static int intOr(Map<String, Object> body, String key, int fallback) {
+    if (body == null || body.get(key) == null) {
+      return fallback;
+    }
+    try {
+      return Integer.parseInt(String.valueOf(body.get(key)));
+    } catch (NumberFormatException ex) {
+      return fallback;
+    }
   }
 
   @GetMapping("/mappings/users")

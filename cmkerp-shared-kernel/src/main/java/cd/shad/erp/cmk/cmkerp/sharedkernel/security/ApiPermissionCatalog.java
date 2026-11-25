@@ -193,6 +193,26 @@ public final class ApiPermissionCatalog {
         "FACTURATION_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_MEDICAMENTS");
     rule("POST", "/api/v1/facturation/billing/medicaments",
         "FACTURATION_MEDICAMENTS_CREATE");
+
+    // Consolidation UAT : rapprochement Mediline + imports historiques (lecture Beach → MySQL)
+    rule("GET", "/api/v1/facturation/patients/match",
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
+    rule("POST", "/api/v1/facturation/patients/match/run",
+        "FACTURATION_AYANTSDROIT_UPDATE", "FACTURATION_AYANTSDROIT_IMPORT");
+    rule("PUT", "/api/v1/facturation/patients/match",
+        "FACTURATION_AYANTSDROIT_UPDATE");
+    rule("POST", "/api/v1/facturation/history/prestations/import",
+        "FACTURATION_PRESTATIONS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/history/medicaments/import",
+        "FACTURATION_MEDICAMENTS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/history/stock/import",
+        "FACTURATION_STOCK_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("GET", "/api/v1/facturation/stock/compartments",
+        "FACTURATION_STOCK_VIEW", "SIDEBAR_FACTURATION_STOCK");
+    rule("PUT", "/api/v1/facturation/stock/compartments",
+        "FACTURATION_STOCK_IMPORT", "FACTURATION_STOCK_STATUS_UPDATE", "FACTURATION_SYNC_IMPORT");
+    rule("GET", "/api/v1/facturation/adapters/outbound",
+        "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION");
   }
 
   /**
