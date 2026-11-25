@@ -193,16 +193,21 @@ public class ClinicReferentialService {
     int safePage = Math.max(page, 0);
     int sourceTotal = legacyReader.count(def, q);
     boolean complete = sourceTotal <= ClinicReferentialCatalog.FULL_COMPARE_LIMIT;
+    boolean windowed = !complete
+        || sourceTotal > ClinicReferentialCatalog.SUPERVISION_DETAILED_COMPARE_LIMIT;
     Map<String, Object> report = baseReport(def);
     report.put("sourceTotal", sourceTotal);
-    report.put("comparisonComplete", complete);
+    report.put("comparisonComplete", complete && !windowed);
+    report.put("windowed", windowed);
     report.put("page", safePage);
     report.put("size", safeSize);
-    if (!complete) {
+    if (windowed) {
       List<Map<String, Object>> window = legacyReader.page(def, q, safePage * safeSize, safeSize);
       annotateWindow(def, window, report);
-      report.put("alreadyImported", null);
-      report.put("available", null);
+      long erpTotal = repository.count(def.code(), null, null);
+      // Estimations globales (fenêtre Beach paginée — pas de scan complet à chaque page).
+      report.put("alreadyImported", erpTotal);
+      report.put("available", Math.max(0L, sourceTotal - erpTotal));
       report.put("unchanged", null);
       report.put("divergences", null);
       return report;
@@ -365,7 +370,7 @@ public class ClinicReferentialService {
     if (clinicFailed || erpCount == null || clinicCount == null) {
       return;
     }
-    if (clinicCount > ClinicReferentialCatalog.FULL_COMPARE_LIMIT) {
+    if (clinicCount > ClinicReferentialCatalog.SUPERVISION_DETAILED_COMPARE_LIMIT) {
       return;
     }
     try {

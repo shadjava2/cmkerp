@@ -16,10 +16,15 @@ import java.util.Optional;
 public final class ClinicReferentialCatalog {
 
   public static final int FULL_COMPARE_LIMIT = 40_000;
-  /** Taille max d'une sélection d'import (tarifs ~2k → lots successifs côté client). */
+  /** Taille max d'une sélection d'import (lots successifs côté client). */
   public static final int IMPORT_SELECTION_LIMIT = 500;
   /** Page max pour la liste des candidats d'import. */
   public static final int IMPORT_CANDIDATES_PAGE_MAX = 500;
+  /**
+   * Au-delà, le centre de sync n'exécute pas le rapprochement ligne-à-ligne
+   * (ex. ayants droit ~30k) — compteurs ERP/CLINIQUE restent fournis.
+   */
+  public static final int SUPERVISION_DETAILED_COMPARE_LIMIT = 2500;
 
   public enum Mode {
     /** Création / modification ERP journalisées vers Beach (INSERT/UPDATE). */
