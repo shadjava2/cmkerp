@@ -54,11 +54,16 @@ Avant de livrer une capacité métier (module, menu, bouton, endpoint, export, v
 
 1. Identifier ou créer le code de permission
 2. Brancher parent hiérarchique
-3. Migrer / seeder le catalogue
-4. Protéger backend + frontend
-5. Mettre à jour l'inventaire
+3. Migrer / seeder le catalogue MySQL
+4. Enregistrer méthode HTTP + chemin dans `ApiPermissionCatalog` (filtre deny-by-default)
+5. Protéger backend (`@RequirePermission` / service) + frontend (`PermissionGate` / `can`)
+6. Vérifier attribution ADMIN + tests 200/403
+7. Rebuild `cmkerp-shared-kernel` puis `cmkerp-gateway` (le JAR fat embarque le kernel)
+8. Mettre à jour l'inventaire ; nettoyer les règles obsolètes si endpoint retiré
 
 **Interdit** : utiliser `MODULE_*` (ou un parent) comme `anyOf` pour autoriser un menu ou une action enfant. La hiérarchie sert au formulaire d'administration, pas à l'autorisation runtime. DENY BY DEFAULT.
+
+**Interdit** : livrer un endpoint `/api/v1/**` présent dans un contrôleur mais absent de `ApiPermissionCatalog` — ADMIN recevra aussi « Endpoint non couvert… ».
 
 ### UI adaptative et points d'entrée
 

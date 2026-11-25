@@ -20,6 +20,8 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 9. **Raccourcis clavier** (`Ctrl+K`, etc.) sont soumis au RBAC : absents / inactifs si la permission manque.
 10. **UI adaptative** : un conteneur fonctionnel sans enfant visible (section, grille, groupe de boutons, onglets, titre + liste) doit être **masqué intégralement** (titre, séparateurs, marges). Les restrictions RBAC ne doivent pas laisser de coquilles vides ni dégrader l'organisation visuelle.
 11. **Nouveau module = intégration réelle.** Une migration ou un seed dans le dépôt ne suffit pas. Preuves obligatoires sur la base cible du gateway : `MODULE_*` en table `permissions`, ADMIN synchronisé, carte portail visible après reconnexion, route accessible, branche admin visible, utilisateur non autorisé sans carte. Interdit de forcer l'affichage via exception ADMIN / hardcode. Build PASS ≠ disponibilité fonctionnelle.
+12. **Endpoint = catalogue central.** Toute création / modification / suppression d'un endpoint HTTP métier (`/api/v1/**`) doit mettre à jour `ApiPermissionCatalog` (méthode + chemin + permission(s) explicites). `@RequirePermission` seul ne suffit pas : `RbacEnforcementFilter` refuse par défaut tout path non catalogué, y compris pour ADMIN. Rebuild obligatoire de `cmkerp-shared-kernel` **puis** `cmkerp-gateway` (le JAR fat embarque le kernel).
+13. **Frontend 403 ≠ liste vide.** Un HTTP 403 ne doit jamais afficher « 0 enregistrements » ni inciter à importer / créer comme si le référentiel était vide.
 
 ## Definition of Done — nouvelle fonctionnalité
 
@@ -32,12 +34,14 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 - [ ] Tous les points d'entrée alignés (UI + raccourci + route + API)
 - [ ] Conteneurs vides masqués (pas de titres orphelins)
 - [ ] Route frontend protégée
-- [ ] Endpoint / service backend sécurisé
+- [ ] Endpoint enregistré dans `ApiPermissionCatalog` (méthode + path)
+- [ ] Endpoint / service backend sécurisé (`@RequirePermission` et/ou filtre)
 - [ ] Révocation session prise en charge (403 + invalidation cache)
 - [ ] Preuve SQL live (permission + ADMIN) si environnement autorisé
 - [ ] Preuve UI live (carte / route) après refresh session
-- [ ] Tests d'autorisation
+- [ ] Test d'accès autorisé + test d'accès refusé (403)
 - [ ] Documentation RBAC actualisée
+- [ ] Déclarations obsolètes nettoyées si endpoint supprimé
 
 ## Interdit
 
@@ -55,6 +59,20 @@ Remplacer par `hasPermission(code)` / `@RequirePermission("CODE")`.
 - Ne jamais créer un second référentiel d'autorisation
 - Ne jamais hardcoder un `id` de permission dans le frontend ou les contrôleurs
 
+## Checklist obligatoire — nouvel endpoint HTTP
+
+1. Déclarer la permission métier (code + parent + description FR)
+2. Enregistrer dans le catalogue MySQL (migration / seed / `RbacSchemaInitializer`)
+3. Rattacher hiérarchiquement (`permissions.parent`)
+4. Enregistrer méthode + chemin dans `ApiPermissionCatalog`
+5. Protéger le contrôleur / service
+6. Brancher le frontend (`PermissionGate` / `can` / route)
+7. Vérifier attribution automatique ADMIN
+8. Test accès autorisé (HTTP 200)
+9. Test accès refusé (HTTP 403)
+10. Rebuild `shared-kernel` + `gateway` et redémarrage réel (pas DevTools seul)
+11. Si suppression d'endpoint : retirer règle catalogue + permissions orphelines documentées
+
 ## Contrôle bloquant CI
 
 Le script `cmkerp/scripts/rbac-compliance-check.sh` est exécuté en CI et **échoue** si :
@@ -62,5 +80,7 @@ Le script `cmkerp/scripts/rbac-compliance-check.sh` est exécuté en CI et **éc
 - hardcode utilisateur nominatif
 - contrôle `role.equals` / `userId == 1` métier
 - absence du catalogue API ou du filtre d'enforcement
+- contrôleur `/api/v1/**` sans règle (ni préfixe ni parent) dans `ApiPermissionCatalog`
+- permissions facturation contrats/sync absentes du seed
 
-Aucune fonctionnalité n'est terminée sans couverture RBAC complète (permission + API + UI + inventaire).
+PASS annotations ≠ PASS couverture runtime. Aucune fonctionnalité n'est terminée sans couverture RBAC complète (permission + catalogue endpoints + API + UI + inventaire).

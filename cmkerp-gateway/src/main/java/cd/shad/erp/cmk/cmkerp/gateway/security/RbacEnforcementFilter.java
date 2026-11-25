@@ -66,7 +66,7 @@ public class RbacEnforcementFilter extends OncePerRequestFilter {
         log.warn("RBAC GAP: endpoint métier sans règle path={} method={} userId={}",
             path, method, userId);
         writeJson(response, HttpServletResponse.SC_FORBIDDEN, "PERMISSION_DENIED",
-            "Endpoint non couvert par le catalogue RBAC — accès refusé par défaut.");
+            "Endpoint non couvert par le catalogue RBAC - acces refuse par defaut.");
         return;
       }
       filterChain.doFilter(request, response);
@@ -92,7 +92,7 @@ public class RbacEnforcementFilter extends OncePerRequestFilter {
       try {
         return jwtTokenProvider.getUserIdFromToken(token);
       } catch (Exception ex) {
-        log.debug("RBAC: userId JWT indisponible — {}", ex.getMessage());
+        log.debug("RBAC: userId JWT indisponible - {}", ex.getMessage());
       }
     }
     return null;
@@ -116,7 +116,8 @@ public class RbacEnforcementFilter extends OncePerRequestFilter {
   private static void writeJson(HttpServletResponse response, int status, String code, String message)
       throws IOException {
     response.setStatus(status);
-    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+    response.setCharacterEncoding("UTF-8");
+    response.setContentType(MediaType.APPLICATION_JSON_VALUE + ";charset=UTF-8");
     response.getWriter().write(
         "{\"status\":" + status
             + ",\"code\":\"" + code + "\""

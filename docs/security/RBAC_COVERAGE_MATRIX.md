@@ -28,6 +28,23 @@ Date d’audit : **2026-11-25**. Sources : ripgrep / inventaire code, `ApiPermis
 | GMAO | 12+ | `MODULE_GMAO` + `GMAO_*` | Zone + layout | `/gmao/**` | 0 | Élevée |
 | DMI / Cardex / Consultation | 25+ | `MODULE_DMI` + `SIDEBAR_*` + `DMI_*` | Sidebar + shell | `/cardex`, `/consultations`, `/mediline` | 0 | Élevée (actions bouton PARTIEL) |
 | POS / Caisse | 10+ | `OUVRIR_MODULE_CAISSE` / `MODULE_STOCK` | cmkerp-frontend (compat) | `/pos/**`, `/ventes` | 0 | Moyenne→Élevée |
+| Facturation (Contrats + Sync CLINIQUE) | 8+ | `FACTURATION_CONTRATS_*` / `FACTURATION_SYNC_*` | Contrats + ClinicSync | `/api/v1/facturation/**` | 0 | Élevée (Lot 1) |
+
+## Endpoints Facturation Lot 1 (catalogue obligatoire)
+
+| Méthode | Path | Permission(s) anyOf |
+| --- | --- | --- |
+| GET | `/api/v1/facturation/contrats` (+ `/{id}`) | `FACTURATION_CONTRATS_VIEW`, `SIDEBAR_FACTURATION_CONTRATS` |
+| POST | `/api/v1/facturation/contrats` | `FACTURATION_CONTRATS_CREATE` |
+| PUT | `/api/v1/facturation/contrats/**` | `FACTURATION_CONTRATS_UPDATE`, `FACTURATION_CONTRATS_STATUS_UPDATE` |
+| DELETE | `/api/v1/facturation/contrats/**` | `FACTURATION_CONTRATS_DELETE` |
+| POST | `/api/v1/facturation/contrats/import/dry-run` | `FACTURATION_CONTRATS_IMPORT`, `FACTURATION_SYNC_DRY_RUN` |
+| POST | `/api/v1/facturation/contrats/import` | `FACTURATION_CONTRATS_IMPORT`, `FACTURATION_SYNC_IMPORT` |
+| GET | `/api/v1/facturation/clinic-sync/**` | `FACTURATION_SYNC_VIEW`, `SIDEBAR_FACTURATION_SYNCHRONISATION`, `FACTURATION_SYNC_HISTORY_VIEW` |
+| POST | `/api/v1/facturation/clinic-sync/**` | `FACTURATION_SYNC_RETRY`, `FACTURATION_SYNC_CONFLICT_RESOLVE`, `FACTURATION_SYNC_IMPORT` |
+| * | `/api/v1/stocks/facturation-sync` | `STOCK_FACTURATION_SYNC`, `MODULE_STOCK` |
+
+Rebuild requis après modification : `mvn -pl cmkerp-gateway -am install` puis redémarrage gateway (shared-kernel embarqué dans le fat JAR).
 
 ## Endpoints publics (exceptions documentées)
 

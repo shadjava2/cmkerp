@@ -140,12 +140,21 @@ public final class ApiPermissionCatalog {
     rule("*", "/api/v1/pos", "OUVRIR_MODULE_CAISSE", "MODULE_STOCK", "STOCK_VENTE_VIEW");
 
     // --- Facturation / coexistence CLINIQUE (MySQL erp_* ; écritures SQL Server gated) ---
+    // Obligatoire : chaque @RequestMapping /api/v1/facturation/** du gateway doit avoir une règle ici.
+    // Rebuild shared-kernel + gateway après toute modification (JAR fat embarque le kernel).
     rule("GET", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_VIEW", "SIDEBAR_FACTURATION_CONTRATS");
-    rule("POST", "/api/v1/facturation/contrats/import/dry-run", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN");
-    rule("POST", "/api/v1/facturation/contrats/import", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/contrats/import/dry-run",
+        "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN");
+    rule("POST", "/api/v1/facturation/contrats/import",
+        "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_CREATE");
-    rule("PUT", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_UPDATE", "FACTURATION_CONTRATS_STATUS_UPDATE");
-    rule("GET", "/api/v1/facturation/clinic-sync", "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION");
+    rule("PUT", "/api/v1/facturation/contrats",
+        "FACTURATION_CONTRATS_UPDATE", "FACTURATION_CONTRATS_STATUS_UPDATE");
+    rule("DELETE", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_DELETE");
+    rule("GET", "/api/v1/facturation/clinic-sync",
+        "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION", "FACTURATION_SYNC_HISTORY_VIEW");
+    rule("POST", "/api/v1/facturation/clinic-sync",
+        "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_CONFLICT_RESOLVE", "FACTURATION_SYNC_IMPORT");
   }
 
   private ApiPermissionCatalog() {
