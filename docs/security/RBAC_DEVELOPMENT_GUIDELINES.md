@@ -45,6 +45,13 @@ const { can } = usePermissions()
 </PermissionGate>
 ```
 
+### UI adaptative
+
+- Aligner **tous** les points d'entrée (bouton, menu, carte, lien, route, raccourci clavier, API) sur la même permission.
+- Ne pas enregistrer / activer un raccourci (`Ctrl+K`, …) sans la permission correspondante.
+- Filtrer les enfants **avant** le rendu du conteneur ; si la liste est vide, masquer titre + conteneur + séparateurs.
+- Ne laisser aucune coquille visuelle vide après filtrage RBAC.
+
 ## Événements
 
 | Événement | ADMIN | Autres rôles |

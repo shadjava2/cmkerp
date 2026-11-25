@@ -16,6 +16,9 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 5. **Hiérarchie `permissions.parent`** : cascade UI d'administration uniquement (cocher/décocher). Une permission parente n'autorise **jamais** implicitement une action enfant non attribuée — ni en frontend (`PermissionGate` / menus), ni en API (`ApiPermissionCatalog` / `@RequirePermission`).
 6. **Refuse by default** : permission absente, inconnue, retirée, utilisateur désactivé, moteur indisponible → accès refusé.
 7. **Interdit** : `hasAny(MODULE_X, SIDEBAR_Y)` pour afficher un menu enfant ; le menu exige sa permission `SIDEBAR_*` / action `*_CREATE` explicite. `MODULE_*` ouvre uniquement la zone module.
+8. **Tous les points d'entrée** vers une fonctionnalité (bouton, menu, carte, lien, route URL, raccourci clavier, API) doivent exiger la **même** permission — aucun accès alternatif ne doit contourner une restriction.
+9. **Raccourcis clavier** (`Ctrl+K`, etc.) sont soumis au RBAC : absents / inactifs si la permission manque.
+10. **UI adaptative** : un conteneur fonctionnel sans enfant visible (section, grille, groupe de boutons, onglets, titre + liste) doit être **masqué intégralement** (titre, séparateurs, marges). Les restrictions RBAC ne doivent pas laisser de coquilles vides ni dégrader l'organisation visuelle.
 
 ## Definition of Done — nouvelle fonctionnalité
 
@@ -25,6 +28,8 @@ Toute création, modification ou suppression d'une fonctionnalité protégée da
 - [ ] Migration SQL versionnée (ou seed via `RbacSchemaInitializer` si Flyway off)
 - [ ] Attribution automatique ADMIN vérifiée
 - [ ] Visibilité frontend conditionnée (`PermissionGate` / `can`)
+- [ ] Tous les points d'entrée alignés (UI + raccourci + route + API)
+- [ ] Conteneurs vides masqués (pas de titres orphelins)
 - [ ] Route frontend protégée
 - [ ] Endpoint / service backend sécurisé
 - [ ] Révocation session prise en charge (403 + invalidation cache)
