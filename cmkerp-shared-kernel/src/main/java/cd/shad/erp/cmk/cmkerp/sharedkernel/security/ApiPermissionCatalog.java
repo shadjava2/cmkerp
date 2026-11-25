@@ -170,6 +170,29 @@ public final class ApiPermissionCatalog {
     rule("POST", "/api/v1/facturation/clinic-sync",
         "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_CONFLICT_RESOLVE", "FACTURATION_SYNC_IMPORT");
     registerClinicReferentials();
+
+    // APIs relationnelles Facturation (source de vérité erp_*)
+    rule("GET", "/api/v1/facturation/dashboard/snapshot",
+        "FACTURATION_DASHBOARD_KPI_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_ACCUEIL", "MODULE_FACTURATION");
+    rule("GET", "/api/v1/facturation/mappings/users",
+        "FACTURATION_UTILISATEURS_VIEW", "SIDEBAR_FACTURATION_UTILISATEURS");
+    rule("PUT", "/api/v1/facturation/mappings/users",
+        "FACTURATION_UTILISATEURS_UPDATE", "FACTURATION_UTILISATEURS_CREATE");
+    rule("GET", "/api/v1/facturation/mappings/pharmacies",
+        "FACTURATION_PHARMACIES_VIEW", "SIDEBAR_FACTURATION_PHARMACIES");
+    rule("PUT", "/api/v1/facturation/mappings/pharmacies",
+        "FACTURATION_PHARMACIES_UPDATE", "FACTURATION_PHARMACIES_CREATE");
+    rule("GET", "/api/v1/facturation/products/search",
+        "FACTURATION_PRODUITS_VIEW", "FACTURATION_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_PRODUITS",
+        "SIDEBAR_FACTURATION_MEDICAMENTS");
+    rule("GET", "/api/v1/facturation/billing/prestations",
+        "FACTURATION_PRESTATIONS_VIEW", "SIDEBAR_FACTURATION_PRESTATIONS");
+    rule("POST", "/api/v1/facturation/billing/prestations",
+        "FACTURATION_PRESTATIONS_CREATE");
+    rule("GET", "/api/v1/facturation/billing/medicaments",
+        "FACTURATION_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_MEDICAMENTS");
+    rule("POST", "/api/v1/facturation/billing/medicaments",
+        "FACTURATION_MEDICAMENTS_CREATE");
   }
 
   /**

@@ -1,37 +1,24 @@
 # CLINIQUE — Autonomous Execution Tracker
 
-Dernière mise à jour : 2026-03-25
+Dernière mise à jour : 2026-03-25 (reprise post-V32)
 
-| ID | Lot | Description | Dépendances | État | Fichiers | Tests | Résultat | Anomalies / blocages |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A0 | 0/1 | Audit `erp_clinic_referentials` + volumes live | — | DONE | MySQL `cmkerp-v24prod` | SQL counts | SERVICES 43, IMPUTATIONS 117, LOCATIONS 3, SOCIETES 620, CLASSES 33, TARIFS 1977, MEDECINS 140, AYANTS 30412, USERS 83, PHARMA 16, PRODUITS 5765, STOCK 5765, MEDICAMENTS 2000, PRESTATIONS 2000 | Seules tables `erp_*` métier avant V32 : `erp_contrats`, `erp_sync_outbox`, `erp_clinic_referentials` |
-| A1 | std | Standard `erp-relational-data-standard.mdc` + AGENTS | — | DONE | `.cursor/rules/erp-relational-data-standard.mdc`, `AGENTS.md` | — | alwaysApply | — |
-| A2 | 2–4 | Migration V32 tables référentielles dédiées | A0 | DONE | `V32__erp_facturation_relational_tables.sql` | SQL apply | Tables + FK OK | Apply manuel (Flyway history vide) |
-| A3 | 2–4 | Migration données JSON → tables typées (sans outbox) | A2 | DONE | V32 DML | counts | 30412 ayants, 484 sociétés… | Aucun outbox |
-| A4 | 3–4 | API list/actif relationnelle + miroir import | A3 | DONE | `ErpFacturationRelationalStore`, `ClinicReferentialService` | unit tests | Compile + tests OK | create/update complets à durcir |
-| A5 | 4 | UI libellés + sélecteurs Sociétés/Ayants/Tarifs | A4 | DONE | `FacturationReferentialPage.tsx` | manuel | — | — |
-| A5b | 4 | PatientPicker Mediline sur Ayants | A5 | DONE | `PatientPicker.tsx` | — | push `1fdb813` | Persist `mediline_ipp` relationnel à durcir |
-| A6 | 2–3 | API/UI Services… via store relationnel | A3 | DONE | list/actif relational | unit | OK | Formulaires create/update mixtes |
-| A7 | 4 | Mapping users / pharmacies / produits | A2 | PARTIAL | tables mappings | SQL | 1966 produits MATCHED | UI mapping manuelle restante |
-| A8 | 5–6 | Tables transactionnelles médicaments / prestations | A2 | PENDING | — | — | — | WRITE Beach non étendu |
-| A9 | final | Docs schema/FK/readiness + commit/push | A4+ | PENDING | docs/integration/* | compliance | — | Recette SQL Server isolée Lots 0/1 ouverte |
-| BLK | 0/1 | Recette écriture Beach isolée | — | BLOCKED | Testcontainers/Docker | — | — | Pas d’env SQL Server isolé ; prod WRITE=TCONTRAT only |
+| ID | Lot | Description | État | Résultat / blocage |
+| --- | --- | --- | --- | --- |
+| A0–A6 | 0–4 | Audit, V32, libellés, sélecteurs | DONE | Voir commits e1a8b20 / a284f41 |
+| A5b | 4 | PatientPicker | DONE | 1fdb813 |
+| R1 | rel | Source de vérité erp_* CREATE/UPDATE + mediline_ipp + V33 | DONE | IDs relationnels ; pont referentials |
+| R2 | 4 | Mapping utilisateurs API+UI | DONE | `/mappings/users` |
+| R3 | 5 | Mapping pharmacies API+UI | DONE | `/mappings/pharmacies` |
+| R4 | 6 | Poste prestations ERP | DONE | LOCAL_ONLY ; Beach off |
+| R5 | 5 | Poste médicaments + produit search | DONE | Pas de double stock |
+| R6 | dash | Dashboard snapshot relationnel | DONE | `/dashboard/snapshot` |
+| R7 | rbac | CREATE perms + ApiPermissionCatalog | DONE | ADMIN grant live |
+| R8 | docs | Rapport maître consolidé | DONE | ce fichier + MASTER |
+| BLK | 0/1 | Recette SQL Server isolée | BLOCKED | Pas d’env isolé |
+| BLK | beach | WRITE hors TCONTRAT | BLOCKED | Autorisation métier requise |
+| OPEN | stock | Mapping STOCK1…n | OPEN | Correspondances non inventées |
+| OPEN | idmvt | Règles IDMVT / tarification historique | OPEN | Décision métier |
 
-## Volumes source (avant normalisation)
+## Volumes vérifiés
 
-| referential_key | count |
-| --- | ---: |
-| SERVICES | 43 |
-| IMPUTATIONS | 117 |
-| LOCATIONS | 3 |
-| SOCIETES | 620 |
-| CLASSES | 33 |
-| TARIFS | 1977 |
-| MEDECINS | 140 |
-| AYANTS_DROIT | 30412 |
-| UTILISATEURS | 83 |
-| PHARMACIES | 16 |
-| PRODUITS | 5765 |
-| STOCK | 5765 |
-| MEDICAMENTS | 2000 (échantillon) |
-| PRESTATIONS | 2000 (échantillon) |
+Ayants 30412 · Sociétés 484 · Tarifs 1977 · Services 43 · Prod MATCHED 1966

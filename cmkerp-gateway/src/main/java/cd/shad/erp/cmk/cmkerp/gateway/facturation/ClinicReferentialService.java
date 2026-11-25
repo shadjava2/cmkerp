@@ -35,7 +35,9 @@ public class ClinicReferentialService {
   };
 
   /** Champs ERP locaux — jamais répliqués vers SQL Server CLINIQUE. */
-  private static final Set<String> ERP_OVERLAY_KEYS = Set.of("SITEID", "SITE_ID");
+  private static final Set<String> ERP_OVERLAY_KEYS = Set.of(
+      "SITEID", "SITE_ID", "MEDILINEIPP", "MEDILINE_IPP", "MEDILINEPATIENTID", "MEDILINE_PATIENT_ID",
+      "PATIENTLINKSTATUS", "PATIENT_LINK_STATUS", "CONTRATID", "CONTRAT_ID", "SOCIETEID", "SOCIETE_ID");
 
   private final ClinicReferentialRepository repository;
   private final ClinicReferentialLegacyReader legacyReader;
@@ -130,12 +132,15 @@ public class ClinicReferentialService {
         null,
         syncStatus,
         userId);
-    mirrorRelationalImport(def, nk, normalized, fingerprint);
+    Map<String, Object> forMirror = new LinkedHashMap<>(normalized);
+    forMirror.putAll(overlays);
+    mirrorRelationalImport(def, nk, forMirror, fingerprint);
     if (replicate) {
       enqueue(def, id, nk, normalized, "INSERT");
     }
     if (relationalStore.supports(def.code())) {
-      return relationalStore.search(def.code(), nk, true, 1, 0).stream()
+      return relationalStore.search(def.code(), nk, null, 5, 0).stream()
+          .filter(row -> nk.equals(String.valueOf(row.get("key"))))
           .findFirst()
           .orElseGet(() -> toView(requireRow(def, id)));
     }
@@ -146,6 +151,84 @@ public class ClinicReferentialService {
   public Map<String, Object> update(String key, long id, Map<String, Object> fields, int version, Long userId) {
     Definition def = require(key);
     assertMutable(def);
+    // Source de vérité métier = tables erp_* lorsque disponibles (IDs relationnels).
+    if (relationalStore.supports(def.code())) {
+      Map<String, Object> current = relationalStore.findById(def.code(), id)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Élément introuvable."));
+      String naturalKey = String.valueOf(current.get("key"));
+      Map<String, Object> merged = new LinkedHashMap<>();
+      Object existingFields = current.get("fields");
+      if (existingFields instanceof Map<?, ?> map) {
+        for (Map.Entry<?, ?> e : map.entrySet()) {
+          if (e.getKey() != null) {
+            merged.put(String.valueOf(e.getKey()), e.getValue());
+          }
+        }
+      }
+      if (fields != null) {
+        merged.putAll(fields);
+      }
+      Map<String, Object> overlays = extractOverlays(merged);
+      Map<String, Object> normalized = ClinicReferentialValues.normalize(
+          def, bindKey(def, naturalKey, stripOverlays(merged)), true, true);
+      String fingerprint = ClinicReferentialValues.fingerprint(def, normalized);
+      if ("AYANTS_DROIT".equals(def.code())) {
+        int updated = relationalStore.updateAyantById(
+            id,
+            first(normalized, "NOM"),
+            str(normalized, "SEXE"),
+            localDate(normalized.get("DATENAIS")),
+            str(normalized, "RELATION"),
+            str(normalized, "CODEFAM"),
+            str(normalized, "CODESOC"),
+            str(normalized, "CONTRAT"),
+            first(overlays, "medilineIpp", "MEDILINE_IPP", "mediline_ipp"),
+            longOrNull(firstRaw(overlays, "medilinePatientId", "MEDILINE_PATIENT_ID")),
+            first(overlays, "patientLinkStatus", "PATIENT_LINK_STATUS"),
+            version,
+            userId);
+        if (updated == 0) {
+          throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger la fiche.");
+        }
+      } else if ("SOCIETES".equals(def.code())) {
+        Long contratId = relationalStore.findContratId(str(normalized, "CONTRAT"));
+        int updated = relationalStore.updateSociete(
+            id,
+            str(normalized, "NOMSOC"),
+            str(normalized, "ADRESSE"),
+            str(normalized, "N_IMPOT"),
+            str(normalized, "NRC"),
+            str(normalized, "ID_NAT"),
+            contratId,
+            str(normalized, "CONTRAT"),
+            version,
+            userId);
+        if (updated == 0) {
+          throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger la fiche.");
+        }
+      } else {
+        mirrorRelationalImport(def, naturalKey, normalized, fingerprint);
+        if ("AYANTS_DROIT".equals(def.code())) {
+          // already handled
+        }
+      }
+      // Pont d'import : synchroniser le bag JSON si la ligne existe encore.
+      repository.findByNaturalKey(def.code(), naturalKey).ifPresent(row -> {
+        Map<String, Object> payload = mergeOverlays(normalized, overlays);
+        repository.updatePayload(
+            def.code(),
+            row.id(),
+            displayLabel(def, normalized),
+            writeJson(payload),
+            fingerprint,
+            "LOCAL_ONLY",
+            row.version(),
+            userId);
+      });
+      return relationalStore.findById(def.code(), id)
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Élément introuvable."));
+    }
+
     ClinicReferentialRecord current = requireRow(def, id);
     Map<String, Object> merged = parsePayload(current.payloadJson());
     if (fields != null) {
@@ -631,20 +714,43 @@ public class ClinicReferentialService {
       if (!isOverlayKey(entry.getKey())) {
         continue;
       }
+      String normalizedKey = entry.getKey().trim().toUpperCase(Locale.ROOT).replace("-", "_");
       Object raw = entry.getValue();
-      if (raw == null || (raw instanceof String text && text.isBlank())) {
-        overlays.put("siteId", null);
-        continue;
-      }
-      try {
-        long siteId = raw instanceof Number number ? number.longValue() : Long.parseLong(String.valueOf(raw).trim());
-        if (siteId <= 0) {
+      if ("SITEID".equals(normalizedKey) || "SITE_ID".equals(normalizedKey)) {
+        if (raw == null || (raw instanceof String text && text.isBlank())) {
+          overlays.put("siteId", null);
+          continue;
+        }
+        try {
+          long siteId = raw instanceof Number number ? number.longValue() : Long.parseLong(String.valueOf(raw).trim());
+          if (siteId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Site ERP invalide.");
+          }
+          siteQueryService.findById(siteId);
+          overlays.put("siteId", siteId);
+        } catch (NumberFormatException ex) {
           throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Site ERP invalide.");
         }
-        siteQueryService.findById(siteId);
-        overlays.put("siteId", siteId);
-      } catch (NumberFormatException ex) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Site ERP invalide.");
+        continue;
+      }
+      if ("MEDILINEIPP".equals(normalizedKey) || "MEDILINE_IPP".equals(normalizedKey)) {
+        overlays.put("medilineIpp", raw == null ? null : String.valueOf(raw).trim());
+        continue;
+      }
+      if ("MEDILINEPATIENTID".equals(normalizedKey) || "MEDILINE_PATIENT_ID".equals(normalizedKey)) {
+        overlays.put("medilinePatientId", longOrNull(raw));
+        continue;
+      }
+      if ("PATIENTLINKSTATUS".equals(normalizedKey) || "PATIENT_LINK_STATUS".equals(normalizedKey)) {
+        overlays.put("patientLinkStatus", raw == null ? null : String.valueOf(raw).trim());
+        continue;
+      }
+      if ("CONTRATID".equals(normalizedKey) || "CONTRAT_ID".equals(normalizedKey)) {
+        overlays.put("contratId", longOrNull(raw));
+        continue;
+      }
+      if ("SOCIETEID".equals(normalizedKey) || "SOCIETE_ID".equals(normalizedKey)) {
+        overlays.put("societeId", longOrNull(raw));
       }
     }
     return overlays;
@@ -754,7 +860,11 @@ public class ClinicReferentialService {
           str(normalized, "COVID"),
           str(normalized, "LOCATION"),
           str(normalized, "SOURCE"),
-          fingerprint);
+          fingerprint,
+          first(normalized, "medilineIpp", "MEDILINE_IPP"),
+          longOrNull(normalized.get("medilinePatientId") != null
+              ? normalized.get("medilinePatientId")
+              : normalized.get("MEDILINE_PATIENT_ID")));
       default -> {
         // no-op
       }
@@ -775,6 +885,18 @@ public class ClinicReferentialService {
       String v = str(map, key);
       if (v != null) {
         return v;
+      }
+    }
+    return null;
+  }
+
+  private static Object firstRaw(Map<String, Object> map, String... keys) {
+    if (map == null) {
+      return null;
+    }
+    for (String key : keys) {
+      if (map.containsKey(key) && map.get(key) != null) {
+        return map.get(key);
       }
     }
     return null;

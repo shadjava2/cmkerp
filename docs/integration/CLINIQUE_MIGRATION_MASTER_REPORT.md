@@ -1,42 +1,78 @@
-# CLINIQUE Migration — Rapport maître
+# CLINIQUE Migration — Rapport maître consolidé
 
-Date : **2026-03-25**  
-Écritures Beach : **`WRITE_ENTITIES=TCONTRAT` uniquement**. CH : aucune écriture.
+Date : **2026-03-25** (reprise autonome post-V32)  
+Écritures Beach : **`WRITE_ENTITIES=TCONTRAT` uniquement**. CH / Mediline écriture : **interdites**.
 
-## Synthèse
+## Architecture — source de vérité
 
-| Lot | Thème | Importé | Écriture Beach |
-| --- | --- | --- | --- |
-| 0–1 | Infra / Contrats | Oui (TCC) | TCONTRAT — **recette isolée restante** |
-| 2 | Services, Imputations, Locations | 43+49+3 | Non |
-| 3 | Sociétés, Classes, Tarifs | 484+24+1977 | Non |
-| 4 | Médecins, Ayants droit, Utilisateurs | 140+30412+18 | Non |
-| 5 | Pharmacies, Produits, Stock, Médicaments | 7+5177+…+2000* | Non |
-| 6 | Prestations | **2000*** / ~981k | Non (import seul) |
-| Autonome | Normalisation relationnelle V32 | **Oui** | Non (migration MySQL only) |
+| Couche | Rôle |
+| --- | --- |
+| Tables `erp_*` typées | **Source de vérité métier** CMK ERP (CRUD, listes, dashboard, facturation) |
+| `erp_clinic_referentials` | Pont d’import / compatibilité temporaire — synchronisé en miroir, plus seule vérité |
+| CLINIQUE Beach | Système historique compatible ; WRITE gated `TCONTRAT` |
+| Mediline | Référentiel patient (lecture) |
 
-\* Volumes historiques massifs : preuve **sélective** opérationnelle.
+## Volumes live (cmkerp-v24prod)
 
-## Architecture relationnelle (2026-03-25)
+| Entité | Count |
+| --- | ---: |
+| Ayants droit | 30 412 |
+| Sociétés | 484 |
+| Tarifs | 1 977 |
+| Services | 43 |
+| User mappings | 18 |
+| Pharmacy mappings | 7 |
+| Product MATCHED | 1 966 |
+| Prestations ERP locales | 0 → croissant via poste de travail |
+| Médicaments ERP locaux | 0 → croissant via poste de travail |
+| Ayants avec IPP Mediline | via PatientPicker + `patient_link_status` |
 
-- Standard permanent : `.cursor/rules/erp-relational-data-standard.mdc` (+ AGENTS.md → six standards).
-- Migration `V32__erp_facturation_relational_tables.sql` appliquée sur `cmkerp-v24prod`.
-- Données migrées hors `erp_clinic_referentials` vers tables typées + FK (voir `CLINIQUE_RELATIONAL_SCHEMA_REPORT.md`).
-- API list/get/actif : lecture prioritaire tables `erp_*` avec libellés joints.
-- Import sélectif : miroir idempotent vers tables typées **sans outbox**.
-- UI : libellés société/contrat/service/imputation ; sélecteurs métier (plus de codes seuls en saisie).
+## Livré dans cette reprise
 
-## Docs associées
+1. V33 `patient_link_status` + persistance Mediline sur update/create ayants  
+2. CREATE/UPDATE relationnels (IDs `erp_*` = vérité)  
+3. Mapping utilisateurs + pharmacies (API + UI)  
+4. Postes de facturation prestations & médicaments (ERP LOCAL_ONLY)  
+5. ProduitPicker / recherche produits  
+6. Dashboard agrégé relationnel  
+7. RBAC : `FACTURATION_PRESTATIONS_CREATE`, `FACTURATION_MEDICAMENTS_CREATE` + catalogue API  
+8. PatientPicker branché + colonne état liaison Mediline  
 
-- `CLINIQUE_AUTONOMOUS_EXECUTION_TRACKER.md`
-- `CLINIQUE_RELATIONAL_SCHEMA_REPORT.md`
-- `CLINIQUE_FOREIGN_KEY_MAPPING_REPORT.md`
-- `CLINIQUE_PRODUCTION_READINESS_REPORT.md`
+## Commits
 
-## Clôture officielle Lots 0–1
+- Backend : chaîne `e1a8b20` → `101f879` + commit de reprise  
+- Frontend : `a284f41` → `1fdb813` + commit de reprise  
 
-Bloquée tant que `CLINIQUE_ISOLATED_SQLSERVER_RECIPE.md` n’est pas exécutée.
+## Distinctions
 
-## Suite autonome restante
+| Capacité | Implémenté | Testé | Validé prod | Autorisé Beach |
+| --- | --- | --- | --- | --- |
+| Tables relationnelles V32/V33 | Oui | SQL + compile | Oui (DB) | N/A |
+| Libellés FK | Oui | Compile | À recetter UI | N/A |
+| PatientPicker + IPP | Oui | Compile | À recetter UI | N/A |
+| Mapping users/pharmacies | Oui | Compile | À recetter UI | N/A |
+| Facturation prestations ERP | Oui | Compile | À recetter | **Non** (LOCAL_ONLY) |
+| Facturation médicaments ERP | Oui | Compile | À recetter | **Non** + pas de stock double |
+| Adaptateurs Beach INSERT autres | Préparé / non | Isolé manquant | Non | **Non** |
+| Recette SQL Server isolée Lots 0/1 | Non | — | — | **Bloqué** (pas d’env isolé) |
 
-PatientPicker Mediline, mapping UI users/pharmacies, formulaires prestations/médicaments transactionnels, dashboard financier agrégé — **sans élargir WRITE_ENTITIES**.
+## Commandes de mise à jour
+
+```powershell
+cd C:\Users\HP\Videos\STSDEV\cmkerp
+git pull
+# Arrêter le gateway si JAR verrouillé, puis :
+mvn -pl cmkerp-shared-kernel,cmkerp-gateway -am -DskipTests package
+# Redémarrer GatewayApplication
+
+cd C:\Users\HP\Videos\STSDEV\consolenotification
+git pull
+npm run dev
+```
+
+## Décisions métier encore nécessaires
+
+- Activation WRITE Beach hors TCONTRAT (entité par entité)  
+- Règles de calcul historique TMEDICAMENT / IDMVT concurrence  
+- Correspondances STOCK1…n ↔ pharmacies/dépôts  
+- Rapprochement automatique ayants ↔ Mediline (interdit sur nom seul)  
