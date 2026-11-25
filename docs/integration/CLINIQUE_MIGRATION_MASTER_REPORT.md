@@ -19,7 +19,7 @@ Ce document remplace les synthèses antérieures. Sprint architectural **clôtur
 | 3 Sociétés / Classes / Tarifs | Prêt UAT | 484 / 24 / 1977 |
 | 4 Acteurs / Mediline | Prêt UAT + rapprochement | **29 100 LINKED** / 851 CONFLICT / 3 REVIEW / 458 UNLINKED |
 | 5 Pharmacie / stock | Partiel → alimenté | 7 map pharma · 5177 map prod · **7951** lignes stock compartiments |
-| 6 Prestations | Formulaire + import histo | **~12 500** tx importées (échantillon progressif ; Beach ~980k) |
+| 6 Prestations | Formulaire + import histo | **~22 500** tx importées (échantillon progressif ; Beach ~980k) |
 | Dashboard | Alimenté | Couverture prestations **2007-11-06 → 2029-12-27** (dates historiques brutes) |
 
 ---
@@ -30,8 +30,8 @@ Ce document remplace les synthèses antérieures. Sprint architectural **clôtur
 | --- | ---: |
 | Ayants droit | 30 412 |
 | Ayants LINKED Mediline | **29 100** |
-| Prestations ERP (dont import histo) | **12 505** (montant Σ ≈ 318 476) |
-| Médicaments ERP (dont import histo) | **11 500** (montant Σ ≈ 128 572) |
+| Prestations ERP (dont import histo) | **22 505** (montant Σ ≈ 549 790) |
+| Médicaments ERP (dont import histo) | **21 500** (montant Σ ≈ 227 468) |
 | Stock clinique (compartiments) | **7 951** |
 | Beach TPRESTATION (source) | ≈ 980 890 |
 | Beach TMEDICAMENT (source) | ≈ 453 475 |
