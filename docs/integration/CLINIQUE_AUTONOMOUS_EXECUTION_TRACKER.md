@@ -9,9 +9,10 @@ Dernière mise à jour : 2026-03-25
 | A2 | 2–4 | Migration V32 tables référentielles dédiées | A0 | DONE | `V32__erp_facturation_relational_tables.sql` | SQL apply | Tables + FK OK | Apply manuel (Flyway history vide) |
 | A3 | 2–4 | Migration données JSON → tables typées (sans outbox) | A2 | DONE | V32 DML | counts | 30412 ayants, 484 sociétés… | Aucun outbox |
 | A4 | 3–4 | API list/actif relationnelle + miroir import | A3 | DONE | `ErpFacturationRelationalStore`, `ClinicReferentialService` | unit tests | Compile + tests OK | create/update complets à durcir |
-| A5 | 4 | UI libellés + sélecteurs Sociétés/Ayants/Tarifs | A4 | DONE | `FacturationReferentialPage.tsx` | manuel | — | PatientPicker Mediline à brancher |
-| A6 | 2–3 | API/UI Services, Imputations, Locations, Classes, Tarifs, Médecins | A3 | PENDING | — | — | — | — |
-| A7 | 4 | Mapping users / pharmacies / produits | A2 | PENDING | `erp_*_external_mappings` | — | — | Pas d’auto-match nominal |
+| A5 | 4 | UI libellés + sélecteurs Sociétés/Ayants/Tarifs | A4 | DONE | `FacturationReferentialPage.tsx` | manuel | — | — |
+| A5b | 4 | PatientPicker Mediline sur Ayants | A5 | DONE | `PatientPicker.tsx` | — | push `1fdb813` | Persist `mediline_ipp` relationnel à durcir |
+| A6 | 2–3 | API/UI Services… via store relationnel | A3 | DONE | list/actif relational | unit | OK | Formulaires create/update mixtes |
+| A7 | 4 | Mapping users / pharmacies / produits | A2 | PARTIAL | tables mappings | SQL | 1966 produits MATCHED | UI mapping manuelle restante |
 | A8 | 5–6 | Tables transactionnelles médicaments / prestations | A2 | PENDING | — | — | — | WRITE Beach non étendu |
 | A9 | final | Docs schema/FK/readiness + commit/push | A4+ | PENDING | docs/integration/* | compliance | — | Recette SQL Server isolée Lots 0/1 ouverte |
 | BLK | 0/1 | Recette écriture Beach isolée | — | BLOCKED | Testcontainers/Docker | — | — | Pas d’env SQL Server isolé ; prod WRITE=TCONTRAT only |
