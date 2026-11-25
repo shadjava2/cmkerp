@@ -1,0 +1,40 @@
+---
+description: Standard de qualité produit CMK ERP — interfaces métier de production, zéro prototypage
+alwaysApply: true
+---
+
+# PRODUCTION RELEASE STANDARD — MANDATORY
+
+CMK ERP est un **produit hospitalier de production**, pas une démonstration, maquette, prototype ou preuve de concept.
+
+## Philosophie
+
+- Complexité technique élevée **en arrière-plan**.
+- Simplicité maximale pour l’utilisateur métier.
+- Sécurité renforcée côté serveur.
+- Interface premium, sobre et exclusivement métier.
+
+## Principes non négociables
+
+1. **Aucun texte de développement** dans une interface métier (simulation, démonstration, prototype, maquette, PoC, backlog, « espace structuré », « à implémenter », « endpoint », noms de tables SQL, migrations, instructions développeur).
+2. **Aucun bouton fictif ou non fonctionnel** ne doit être livré comme disponible.
+3. **Aucun bouton de simulation technique** dans les formulaires métier. Les contrôles préalables (dry-run, validations) restent côté backend et s’intègrent dans l’opération réelle (ex. Importer → analyse → confirmation → exécution).
+4. **Headers compacts** : titre, compteur utile, actions principales — pas de paragraphes techniques.
+5. **Informations techniques** réservées aux espaces de supervision autorisés (administrateurs).
+6. **Données affichées = données réelles** — jamais de KPI ou lignes fictives pour « remplir » l’écran.
+7. **États d’erreur différenciés** : chargement, données, vide réel, accès refusé, erreur serveur, source indisponible. Un 403 ne doit jamais afficher « 0 enregistrements ».
+8. **Messages utilisateur** courts et professionnels. Détails techniques → journaux backend + corrélation.
+9. Toute fonctionnalité respecte conjointement : **Design System**, **RBAC**, **protection CLINIQUE legacy**.
+10. **Build PASS ≠ livré.** Preuves d’intégration (API 200/403, UI métier, permissions) obligatoires.
+
+## Formulaires référentiels (modèle Contrats)
+
+- Colonnes métier : Code, Désignation, Statut, Synchronisation, Actions.
+- Masquer les colonnes techniques (source système, codes internes) du tableau principal.
+- Labels professionnels : Actif / Inactif / À jour / En attente / Conflit / Échec.
+- Une seule commande d’import métier ; confirmation avec résumé utile.
+- Pagination, recherche, filtres, confirmations sur opérations sensibles.
+
+## Documentation
+
+Les explications techniques, architectures et procédures développeur restent dans `docs/` du dépôt — jamais dans l’UI métier.

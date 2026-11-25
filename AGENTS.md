@@ -1,14 +1,17 @@
 # AGENTS.md — CMK ERP
 
-## Trois standards architecturaux permanents
+## Quatre standards architecturaux permanents
 
 | Standard | Fichier | Responsabilité |
 | --- | --- | --- |
 | RBAC Security | `.cursor/rules/rbac-security.mdc` | Autorisations et sécurité |
 | CMK Design System | `.cursor/rules/cmk-design-system.mdc` | Cohérence visuelle et ergonomique |
 | CLINIQUE Legacy Protection | `.cursor/rules/clinic-legacy-protection.mdc` | Intégrité des bases historiques SQL Server |
+| Production Release | `.cursor/rules/production-release-standard.mdc` | Qualité produit, UI métier, zéro prototypage |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
+
+**Philosophie produit** : complexité technique en arrière-plan, simplicité maximale pour l’utilisateur, sécurité serveur renforcée, interface exclusivement métier. Aucun texte de développement, bouton de simulation ou fonctionnalité fictive dans l’UI.
 
 ### Migration CLINIQUE (coexistence)
 
