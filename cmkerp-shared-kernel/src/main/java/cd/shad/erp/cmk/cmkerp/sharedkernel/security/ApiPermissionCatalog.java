@@ -142,7 +142,11 @@ public final class ApiPermissionCatalog {
     // --- Facturation / coexistence CLINIQUE (MySQL erp_* ; écritures SQL Server gated) ---
     // Obligatoire : chaque @RequestMapping /api/v1/facturation/** du gateway doit avoir une règle ici.
     // Rebuild shared-kernel + gateway après toute modification (JAR fat embarque le kernel).
+    rule("GET", "/api/v1/facturation/contrats/import/candidates",
+        "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN", "FACTURATION_SYNC_IMPORT");
     rule("GET", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_VIEW", "SIDEBAR_FACTURATION_CONTRATS");
+    rule("POST", "/api/v1/facturation/contrats/import/selected",
+        "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/contrats/import/dry-run",
         "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN");
     rule("POST", "/api/v1/facturation/contrats/import",

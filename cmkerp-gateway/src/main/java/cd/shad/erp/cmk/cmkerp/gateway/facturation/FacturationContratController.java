@@ -1,5 +1,7 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.ResponseEntity;
@@ -63,6 +65,22 @@ public class FacturationContratController {
     boolean actif = Boolean.TRUE.equals(body.get("actif"))
         || "true".equalsIgnoreCase(String.valueOf(body.get("actif")));
     return ResponseEntity.ok(service.setActif(id, actif, intVal(body.get("version"), 1), userId));
+  }
+
+  @GetMapping("/contrats/import/candidates")
+  public ResponseEntity<Map<String, Object>> importCandidates(
+      @RequestParam(required = false) String q) {
+    return ResponseEntity.ok(service.listImportCandidates(q));
+  }
+
+  @PostMapping("/contrats/import/selected")
+  public ResponseEntity<Map<String, Object>> importSelected(@RequestBody Map<String, Object> body) {
+    Object raw = body == null ? null : body.get("codes");
+    List<String> codes = Collections.emptyList();
+    if (raw instanceof List<?> list) {
+      codes = list.stream().map(v -> v == null ? null : String.valueOf(v)).toList();
+    }
+    return ResponseEntity.ok(service.importSelected(codes));
   }
 
   @PostMapping("/contrats/import/dry-run")

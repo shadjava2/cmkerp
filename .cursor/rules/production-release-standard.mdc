@@ -35,6 +35,15 @@ CMK ERP est un **produit hospitalier de production**, pas une démonstration, ma
 - Une seule commande d’import métier ; confirmation avec résumé utile.
 - Pagination, recherche, filtres, confirmations sur opérations sensibles.
 
+## Importations CLINIQUE → ERP
+
+1. Parcours obligatoire : **Importer → Comparer → Sélectionner → Valider → Enregistrer → Actualiser**.
+2. Présenter les **candidats** avant toute écriture ; aucune présélection par défaut.
+3. Import **sélectif**, contrôlé et **idempotent** (pas de doublon, pas d’écrasement automatique, pas de réactivation du statut ERP).
+4. Les dialogues natifs du navigateur (`window.confirm` / `alert` / `prompt`) sont **interdits** dans les interfaces métier — utiliser Dialog / Modal / Toast CMK ERP.
+5. Mutualiser via un composant partagé (ex. `ErpImportDialog`) ; configurations métier différentes, pas de SQL arbitraire côté client.
+6. SQL Server CLINIQUE : **SELECT uniquement** ; écritures uniquement MySQL ERP.
+
 ## Documentation
 
 Les explications techniques, architectures et procédures développeur restent dans `docs/` du dépôt — jamais dans l’UI métier.

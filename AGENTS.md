@@ -13,6 +13,8 @@ CMK ERP est **une seule application**, plusieurs espaces métier. On change de m
 
 **Philosophie produit** : complexité technique en arrière-plan, simplicité maximale pour l’utilisateur, sécurité serveur renforcée, interface exclusivement métier. Aucun texte de développement, bouton de simulation ou fonctionnalité fictive dans l’UI.
 
+**Importations** : parcours Importer → Comparer → Sélectionner → Valider → Enregistrer → Actualiser via `ErpImportDialog` (pas de `window.confirm`). SQL Server = lecture seule ; MySQL = écriture contrôlée.
+
 ### Migration CLINIQUE (coexistence)
 
 - Nouvelles structures = MySQL `erp_*` uniquement.

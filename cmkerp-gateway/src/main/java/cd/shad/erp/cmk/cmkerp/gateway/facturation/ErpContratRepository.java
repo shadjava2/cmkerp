@@ -161,6 +161,7 @@ public class ErpContratRepository {
     String d = trimTo(designation, 50);
     Optional<ErpContratRecord> existing = findByCode(c);
     if (existing.isPresent()) {
+      // Ne jamais réactiver ni écraser le statut actif ERP.
       return jdbc.update(
           """
               UPDATE erp_contrats
@@ -171,6 +172,24 @@ public class ErpContratRepository {
           d, c, c);
     }
     insert(c, d, true, "IMPORT_CLINIQUE", c, "IMPORTED", null);
+    return 1;
+  }
+
+  /**
+   * Import sélectif : insertion uniquement si le code est absent. Aucune mise à jour,
+   * aucune réactivation du statut actif.
+   *
+   * @return 1 si créé, 0 si déjà présent / ignoré
+   */
+  public int insertIfAbsentFromImport(String code, String designation) {
+    String c = normalizeCode(code);
+    if (c == null || c.isBlank()) {
+      return 0;
+    }
+    if (findByCode(c).isPresent()) {
+      return 0;
+    }
+    insert(c, trimTo(designation, 50), true, "IMPORT_CLINIQUE", c, "IMPORTED", null);
     return 1;
   }
 

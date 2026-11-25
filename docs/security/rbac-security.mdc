@@ -84,3 +84,7 @@ Le script `cmkerp/scripts/rbac-compliance-check.sh` est exécuté en CI et **éc
 - permissions facturation contrats/sync absentes du seed
 
 PASS annotations ≠ PASS couverture runtime. Aucune fonctionnalité n'est terminée sans couverture RBAC complète (permission + catalogue endpoints + API + UI + inventaire).
+
+## Importations sélectives
+
+Les endpoints de consultation des candidats (`…/import/candidates`) et d’import sélectionné (`…/import/selected`) exigent les permissions d’import explicites — jamais `MODULE_*` seul. Le bouton Importer, l’ouverture du popup, le chargement et la validation partagent la même permission métier.

@@ -69,6 +69,11 @@ class ApiPermissionCatalogTest {
     assertTrue(ApiPermissionCatalog.match("PUT", "/api/v1/facturation/contrats/12/actif").isPresent());
     assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/contrats/import/dry-run").isPresent());
     assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/contrats/import").isPresent());
+    assertTrue(ApiPermissionCatalog.match("GET", "/api/v1/facturation/contrats/import/candidates").isPresent());
+    assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/contrats/import/selected").isPresent());
+    var candidates = ApiPermissionCatalog.match("GET", "/api/v1/facturation/contrats/import/candidates")
+        .orElseThrow();
+    assertTrue(candidates.pathPrefix().contains("candidates"));
     assertTrue(ApiPermissionCatalog.match("GET", "/api/v1/facturation/clinic-sync/status").isPresent());
 
     var list = ApiPermissionCatalog.match("GET", "/api/v1/facturation/contrats").orElseThrow();

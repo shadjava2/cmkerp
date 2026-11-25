@@ -30,6 +30,11 @@ sidebar bleu nuit `#112339`, header blanc 64px, motif institutionnel (`MedicalWh
 - Dupliquer un composant DMI « approximativement » au lieu de réutiliser tokens et structure.
 - Données financières fictives pour « remplir » une maquette.
 - Footer flottant ou zones vides artificielles dues à des conteneurs mal dimensionnés.
+- Dialogues natifs navigateur (`window.confirm` / `alert` / `prompt`) dans les écrans métier — utiliser `ModalOverlay`, `ConfirmDialog`, `ErpImportDialog`, toasts ERP.
+
+## Importations référentielles
+
+Popup premium mutualisé (`ErpImportDialog`) : header sticky + KPIs, tableau scrollable interne, footer fixe, sélection explicite, aucune présélection. Styles dans `erpShell.css` (`.erp-import-dialog*`).
 
 ## Nouveau module — checklist visuelle
 
