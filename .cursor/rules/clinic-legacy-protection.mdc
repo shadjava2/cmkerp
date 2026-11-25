@@ -1,0 +1,41 @@
+---
+description: Protection absolue des bases historiques CLINIQUE Beach et CLINIQUE CH
+alwaysApply: true
+---
+
+# CLINIQUE LEGACY PROTECTION — MANDATORY
+
+CLINIQUE Beach et CLINIQUE CH sont des bases SQL Server de **production historique**.
+
+## Interdit (DDL / structure)
+
+Sur tout DataSource CLINIQUE : CREATE / ALTER / DROP / TRUNCATE, index, triggers, procédures, contraintes, types, PK/FK, propriétés de base, Flyway/Liquibase, `ddl-auto`.
+
+## DML
+
+- SELECT : autorisé dans le périmètre approuvé.
+- INSERT / UPDATE : uniquement via services de réplication contrôlés + feature flags.
+- DELETE : interdit par défaut ; exceptions métier validées seulement.
+- CH : `clinic.ch.write.enabled=false` — aucune écriture automatique depuis cette migration.
+- Pas de `SELECT *` sur `TUTILISATEUR` (exclure `MOTDEPASSE`).
+- Jamais importer / exposer / logger les mots de passe historiques.
+
+## Architecture
+
+- Tables métier nouvelles = MySQL `erp_*` uniquement.
+- Réplication = transactional outbox MySQL → worker → SQL Server paramétré.
+- Pas de double écriture naïve sans journal / idempotence / rapprochement.
+- Compte applicatif : pas de `sa` / `db_owner` ; pas de DDL.
+
+## Feature flags (défaut sûr)
+
+```
+clinic.beach.sync.enabled=false
+clinic.beach.write.enabled=false
+clinic.beach.delete.enabled=false
+clinic.ch.write.enabled=false
+```
+
+Activation production = autorisation explicite + validation par entité.
+
+Toute violation = anomalie de sécurité bloquante.

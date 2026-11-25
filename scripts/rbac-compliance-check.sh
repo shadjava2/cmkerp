@@ -80,7 +80,9 @@ grep -q "SIDEBAR_FACTURATION_MEDICAMENTS" "$ROOT/scripts/rbac-seed-full-catalog.
 grep -q "FACTURATION_DASHBOARD_KPI_MEDICAMENTS_VIEW" "$ROOT/scripts/rbac-seed-full-catalog.sql"
 test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V28__rbac_module_facturation_and_labels.sql"
 test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V29__rbac_facturation_v2_sidebar.sql"
-echo "OK: migrations V24–V29 + seed fonctionnel présentes"
+test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V30__erp_clinic_contrats_and_sync_outbox.sql"
+grep -q "FACTURATION_CONTRATS_VIEW" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+echo "OK: migrations V24–V30 + seed fonctionnel présentes"
 
 # 6. Matrice de couverture
 if [ -f "$WS/docs/security/RBAC_COVERAGE_MATRIX.md" ] || [ -f "$ROOT/docs/security/RBAC_COVERAGE_MATRIX.md" ]; then

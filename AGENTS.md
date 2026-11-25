@@ -1,13 +1,21 @@
 # AGENTS.md — CMK ERP
 
-## Deux standards architecturaux permanents
+## Trois standards architecturaux permanents
 
 | Standard | Fichier | Responsabilité |
 | --- | --- | --- |
 | RBAC Security | `.cursor/rules/rbac-security.mdc` | Autorisations et sécurité |
 | CMK Design System | `.cursor/rules/cmk-design-system.mdc` | Cohérence visuelle et ergonomique |
+| CLINIQUE Legacy Protection | `.cursor/rules/clinic-legacy-protection.mdc` | Intégrité des bases historiques SQL Server |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
+
+### Migration CLINIQUE (coexistence)
+
+- Nouvelles structures = MySQL `erp_*` uniquement.
+- SQL Server Beach/CH = schéma **immuable** ; DML via outbox + feature flags (défaut off).
+- Documentation : `docs/integration/CLINIQUE_*.md`
+- Contrôle : `cmkerp/scripts/clinic-legacy-compliance-check.sh`
 
 ## Standard architectural obligatoire : Design System
 

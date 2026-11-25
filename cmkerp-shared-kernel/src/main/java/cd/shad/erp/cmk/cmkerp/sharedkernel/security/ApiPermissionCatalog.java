@@ -8,11 +8,13 @@ import java.util.Optional;
 /**
  * Catalogue central path API → permission(s) requises (anyOf).
  *
- * <p>Refuse par défaut tout endpoint métier non listé (hors whitelist publique).
+ * <p>
+ * Refuse par défaut tout endpoint métier non listé (hors whitelist publique).
  */
 public final class ApiPermissionCatalog {
 
-  public record Rule(String method, String pathPrefix, String... anyOfPermissions) {}
+  public record Rule(String method, String pathPrefix, String... anyOfPermissions) {
+  }
 
   private static final List<Rule> RULES = new ArrayList<>();
 
@@ -86,7 +88,8 @@ public final class ApiPermissionCatalog {
     rule("*", "/api/v1/gmao", "MODULE_GMAO", "OUVRIR_MODULE_GMAO");
 
     // --- DMI / consultations / cardex ---
-    // MODULE_DMI n'autorise PAS seul les opérations métier (pas d'héritage descendants).
+    // MODULE_DMI n'autorise PAS seul les opérations métier (pas d'héritage
+    // descendants).
     rule("GET", "/api/v1/consultations", "CONSULTER_CONSULTATION", "DMI_CABINET_PATIENT_VIEW",
         "DMI_CABINET_REGISTRE_CONSULTATIONS_VIEW", "DMI_CABINET_FILE_ACTIVE_VIEW");
     rule("POST", "/api/v1/consultations", "CREER_CONSULTATION", "DMI_CABINET_CONSULTATION_CREATE",
@@ -135,9 +138,18 @@ public final class ApiPermissionCatalog {
 
     // --- POS ---
     rule("*", "/api/v1/pos", "OUVRIR_MODULE_CAISSE", "MODULE_STOCK", "STOCK_VENTE_VIEW");
+
+    // --- Facturation / coexistence CLINIQUE (MySQL erp_* ; écritures SQL Server gated) ---
+    rule("GET", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_VIEW", "SIDEBAR_FACTURATION_CONTRATS");
+    rule("POST", "/api/v1/facturation/contrats/import/dry-run", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN");
+    rule("POST", "/api/v1/facturation/contrats/import", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_CREATE");
+    rule("PUT", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_UPDATE", "FACTURATION_CONTRATS_STATUS_UPDATE");
+    rule("GET", "/api/v1/facturation/clinic-sync", "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION");
   }
 
-  private ApiPermissionCatalog() {}
+  private ApiPermissionCatalog() {
+  }
 
   private static void rule(String method, String pathPrefix, String... anyOf) {
     RULES.add(new Rule(method, pathPrefix, anyOf));

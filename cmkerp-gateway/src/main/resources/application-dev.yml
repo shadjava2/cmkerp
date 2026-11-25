@@ -6,12 +6,21 @@
 # ==========================================
 # DATASOURCES - Variables d'environnement avec valeurs par défaut DEV
 # ==========================================
+# Coexistence CLINIQUE — défauts sûrs (aucune écriture SQL Server nouvelle)
+clinic:
+  beach:
+    sync-enabled: ${CLINIC_BEACH_SYNC_ENABLED:false}
+    write-enabled: ${CLINIC_BEACH_WRITE_ENABLED:false}
+    delete-enabled: ${CLINIC_BEACH_DELETE_ENABLED:false}
+  ch:
+    write-enabled: ${CLINIC_CH_WRITE_ENABLED:false}
+
 cmk:
   datasource:
     primary:
       # URL JDBC optimisée MySQL 8 avec paramètres performance
       # Optimisations ajoutées : cacheResultSetMetadata, cacheCallableStmts, enableQueryTimeouts
-      url: ${CMK_PRIMARY_DB_URL:jdbc:mysql://192.168.100.254:32768/cmkerp-v24prod?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useCompression=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&rewriteBatchedStatements=true&useLocalSessionState=true&elideSetAutoCommits=true&alwaysSendSetIsolation=false&cacheServerConfiguration=true&cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&maintainTimeStats=false}
+      url: ${CMK_PRIMARY_DB_URL:jdbc:mysql://127.0.0.1:32768/cmkerp-v24prod?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true&useCompression=true&useServerPrepStmts=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048&rewriteBatchedStatements=true&useLocalSessionState=true&elideSetAutoCommits=true&alwaysSendSetIsolation=false&cacheServerConfiguration=true&cacheResultSetMetadata=true&cacheCallableStmts=true&enableQueryTimeouts=true&useUnicode=true&characterEncoding=UTF-8&zeroDateTimeBehavior=convertToNull&maintainTimeStats=false}
       username: ${CMK_PRIMARY_DB_USER:cmkroot}
       password: ${CMK_PRIMARY_DB_PASSWORD:CMK***beach-server+++MySQL8}						
       driver-class-name: com.mysql.cj.jdbc.Driver
