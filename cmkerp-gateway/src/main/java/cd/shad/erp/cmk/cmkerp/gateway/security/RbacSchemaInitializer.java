@@ -47,6 +47,7 @@ public class RbacSchemaInitializer implements ApplicationRunner {
       seedPhase3AdminConsole();
       seedFunctionalCatalogSql();
       seedModuleFacturation();
+      seedModuleFacturationV2();
       syncAdmin();
       ensureAdminProtectTrigger();
       ensurePermissionFkCascade();
@@ -254,8 +255,8 @@ public class RbacSchemaInitializer implements ApplicationRunner {
   }
 
   /**
-   * Module Facturation autonome — racine + menu Accueil uniquement (capacités ventes réutilisent STOCK_*).
-   * Pas d'ID numérique imposé ; sync ADMIN via {@link #syncAdmin()}.
+   * Module Facturation autonome — racine + menu Accueil / Tableau de bord
+   * (capacités ventes / sync réutilisent STOCK_*). Sync ADMIN via {@link #syncAdmin()}.
    */
   private void seedModuleFacturation() {
     if (findPermissionId("MODULE_FACTURATION") == null) {
@@ -274,11 +275,64 @@ public class RbacSchemaInitializer implements ApplicationRunner {
     if (findPermissionId("SIDEBAR_FACTURATION_ACCUEIL") == null) {
       jdbc.update(
           "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,?,NOW(),NOW())",
-          "SIDEBAR_FACTURATION_ACCUEIL", "Menu Accueil du module Facturation", moduleId);
+          "SIDEBAR_FACTURATION_ACCUEIL", "Menu Tableau de bord du module Facturation", moduleId);
     } else {
       jdbc.update(
           "UPDATE permissions SET description = ?, parent = ?, dateupdate = NOW() WHERE nom = ?",
-          "Menu Accueil du module Facturation", moduleId, "SIDEBAR_FACTURATION_ACCUEIL");
+          "Menu Tableau de bord du module Facturation", moduleId, "SIDEBAR_FACTURATION_ACCUEIL");
+    }
+  }
+
+  /** Facturation V2 — menus SIDEBAR_* + KPI dashboard branchés sur données réelles. */
+  private void seedModuleFacturationV2() {
+    Long moduleId = findPermissionId("MODULE_FACTURATION");
+    if (moduleId == null) {
+      return;
+    }
+    String[][] sidebars = {
+        {"SIDEBAR_FACTURATION_CONTRATS", "Menu Contrats du module Facturation"},
+        {"SIDEBAR_FACTURATION_AYANTSDROIT", "Menu Ayants droit du module Facturation"},
+        {"SIDEBAR_FACTURATION_SOCIETES", "Menu Sociétés du module Facturation"},
+        {"SIDEBAR_FACTURATION_PRESTATIONS", "Menu Prestations du module Facturation"},
+        {"SIDEBAR_FACTURATION_MEDICAMENTS", "Menu Médicaments du module Facturation"},
+        {"SIDEBAR_FACTURATION_TARIFS", "Menu Tarifs du module Facturation"},
+        {"SIDEBAR_FACTURATION_IMPUTATIONS", "Menu Imputations du module Facturation"},
+        {"SIDEBAR_FACTURATION_CLASSES", "Menu Classes du module Facturation"},
+        {"SIDEBAR_FACTURATION_MEDECINS", "Menu Médecins du module Facturation"},
+        {"SIDEBAR_FACTURATION_SERVICES", "Menu Services du module Facturation"},
+        {"SIDEBAR_FACTURATION_PHARMACIES", "Menu Pharmacies du module Facturation"},
+        {"SIDEBAR_FACTURATION_PRODUITS", "Menu Produits du module Facturation"},
+        {"SIDEBAR_FACTURATION_STOCK", "Menu Stock du module Facturation"},
+        {"SIDEBAR_FACTURATION_UTILISATEURS", "Menu Utilisateurs du module Facturation"},
+    };
+    for (String[] row : sidebars) {
+      upsertPermission(row[0], row[1], moduleId);
+    }
+    Long accueilId = findPermissionId("SIDEBAR_FACTURATION_ACCUEIL");
+    if (accueilId == null) {
+      return;
+    }
+    String[][] dash = {
+        {"FACTURATION_DASHBOARD_KPI_MEDICAMENTS_VIEW", "Voir le KPI médicaments facturés (dashboard)"},
+        {"FACTURATION_DASHBOARD_KPI_PRIVES_VIEW", "Voir le KPI patients privés (dashboard)"},
+        {"FACTURATION_DASHBOARD_KPI_CONTRATS_USAGE_VIEW", "Voir le KPI facturation sous contrat (dashboard)"},
+        {"FACTURATION_DASHBOARD_CHART_EVOLUTION_VIEW", "Voir le graphique d'évolution (dashboard)"},
+        {"FACTURATION_DASHBOARD_TABLE_PRODUITS_VIEW", "Voir le tableau produits facturés (dashboard)"},
+    };
+    for (String[] row : dash) {
+      upsertPermission(row[0], row[1], accueilId);
+    }
+  }
+
+  private void upsertPermission(String nom, String description, Long parentId) {
+    if (findPermissionId(nom) == null) {
+      jdbc.update(
+          "INSERT INTO permissions (nom, description, parent, datecreate, dateupdate) VALUES (?,?,?,NOW(),NOW())",
+          nom, description, parentId);
+    } else {
+      jdbc.update(
+          "UPDATE permissions SET description = ?, parent = ?, dateupdate = NOW() WHERE nom = ?",
+          description, parentId, nom);
     }
   }
 

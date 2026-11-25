@@ -16,15 +16,27 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | DMI | `accessZones.ts` | `/dossier-patient` | `MODULE_DMI` | 0 | OK |
 | Facturation | `accessZones.ts` | `/facturation` | `MODULE_FACTURATION` | 0 | OK |
 
-### Facturation — menus implémentés (v1)
+### Facturation — menus V2 (module autonome)
 
 | Menu / capacité | Permission | Parent / réutilisation | État |
 | --- | --- | --- | --- |
-| Accueil module | `SIDEBAR_FACTURATION_ACCUEIL` | `MODULE_FACTURATION` | OK |
-| Circuits contrats / privées | `STOCK_VENTE_VIEW` (+ `STOCK_VENTE_CREATE` pour création) | `MODULE_STOCK` (API partagée) | OK — réutilisation |
+| Tableau de bord | `SIDEBAR_FACTURATION_ACCUEIL` | `MODULE_FACTURATION` | OK |
+| KPI médicaments / privé / contrat | `FACTURATION_DASHBOARD_KPI_*` | `SIDEBAR_FACTURATION_ACCUEIL` | OK |
+| Chart évolution / table produits | `FACTURATION_DASHBOARD_CHART_EVOLUTION_VIEW` / `…_TABLE_PRODUITS_VIEW` | `SIDEBAR_FACTURATION_ACCUEIL` | OK |
+| Contrats (conventions) | `SIDEBAR_FACTURATION_CONTRATS` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Sociétés | `SIDEBAR_FACTURATION_SOCIETES` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` | `MODULE_FACTURATION` | OK |
+| Actions ventes médicaments | `STOCK_VENTE_VIEW` / `STOCK_VENTE_CREATE` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
+| Tarifs | `SIDEBAR_FACTURATION_TARIFS` | `MODULE_FACTURATION` | OK |
 | Sync Beach ↔ CH | `STOCK_FACTURATION_SYNC` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
+| Imputations / Classes / Médecins / Services | `SIDEBAR_FACTURATION_*` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Pharmacies / Stock lecture | `SIDEBAR_FACTURATION_PHARMACIES` / `_STOCK` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Produits | `SIDEBAR_FACTURATION_PRODUITS` + `STOCK_PRODUIT_VIEW` | module + Stock | OK |
+| Utilisateurs | `SIDEBAR_FACTURATION_UTILISATEURS` | `MODULE_FACTURATION` | PARTIEL (shell) |
 | Facturation des soins (DMI) | `SIDEBAR_FACTURATION` | `MODULE_DMI` | Conservé (parcours clinique) |
-| Dashboard / conventions / créances / remboursements natifs | — | — | Backlog |
+| Encaissements / créances natifs | — | — | Backlog (pas de KPI fictif) |
 
 ## 2. Sidebar DMI
 

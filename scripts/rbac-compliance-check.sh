@@ -76,8 +76,11 @@ grep -q "DMI_CABINET_PRISE_EN_CHARGE_CREATE" "$ROOT/scripts/rbac-seed-full-catal
 grep -q "DMI_ACCUEIL_NOUVEAU_DOSSIER" "$ROOT/scripts/rbac-seed-full-catalog.sql"
 grep -q "STOCK_PRODUIT_CREATE" "$ROOT/scripts/rbac-seed-full-catalog.sql"
 grep -q "MODULE_FACTURATION" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+grep -q "SIDEBAR_FACTURATION_MEDICAMENTS" "$ROOT/scripts/rbac-seed-full-catalog.sql"
+grep -q "FACTURATION_DASHBOARD_KPI_MEDICAMENTS_VIEW" "$ROOT/scripts/rbac-seed-full-catalog.sql"
 test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V28__rbac_module_facturation_and_labels.sql"
-echo "OK: migrations V24–V28 + seed fonctionnel présentes"
+test -f "$ROOT/cmkerp-platform/src/main/resources/db/migration/V29__rbac_facturation_v2_sidebar.sql"
+echo "OK: migrations V24–V29 + seed fonctionnel présentes"
 
 # 6. Matrice de couverture
 if [ -f "$WS/docs/security/RBAC_COVERAGE_MATRIX.md" ] || [ -f "$ROOT/docs/security/RBAC_COVERAGE_MATRIX.md" ]; then
