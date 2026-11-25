@@ -326,7 +326,7 @@ public class ClinicContratSyncEngine {
           HttpStatus.SERVICE_UNAVAILABLE,
           "Écritures Beach TCONTRAT désactivées — intentions journalisées en SUSPENDED uniquement si préparation.");
     }
-    // L'écriture réelle passe par l'outbox worker — ici on (re)met en PENDING.
+    // Remet en PENDING (y compris intentions déjà SUSPENDED) ; le worker pousse vers CLINIQUE.
     int prepared = 0;
     int skipped = 0;
     Set<String> exclude = writeGuard.properties().getBeach().excludeCodeSet();
@@ -343,8 +343,13 @@ public class ClinicContratSyncEngine {
       }
       ErpContratRecord erp = erpOpt.get();
       if (repository.hasOpenOutbox(erp.id(), "TCONTRAT")) {
-        // Relancer via PENDING si SUSPENDED/FAILED
-        skipped++;
+        int requeued = repository.requeueOpenOutboxToPending(erp.id(), "TCONTRAT");
+        if (requeued <= 0) {
+          skipped++;
+          continue;
+        }
+        repository.updateSyncStatus(erp.id(), "PENDING");
+        prepared++;
         continue;
       }
       enqueue(erp.id(), erp.code(), erp.designation(), erp.legacyCode() == null ? "INSERT" : "UPDATE", userId, "PENDING");

@@ -27,18 +27,13 @@ import cd.shad.erp.cmk.cmkerp.sharedkernel.security.JwtTokenProvider;
  * <li>Extrait le token depuis l'en-tête Authorization (format: "Bearer &lt;token&gt;") OU le cookie "cmk-auth-token"</li>
  * <li>Priorité : Authorization header > Cookie (pour compatibilité)</li>
  * <li>Valide le token via JwtTokenProvider</li>
- * <li>Charge les informations de l'utilisateur avec les permissions depuis le token JWT</li>
+ * <li>Charge l'identité utilisateur depuis le JWT (userId / username)</li>
  * <li>Place l'authentification dans le SecurityContext</li>
  * </ul>
  *
  * <p>
- * Optimisations :
- * <ul>
- * <li>Les permissions sont extraites directement du token JWT (pas de requête DB)</li>
- * <li>Support des cookies HttpOnly pour une sécurité renforcée</li>
- * <li>Logs de debug pour le troubleshooting</li>
- * <li>Gestion robuste des erreurs</li>
- * </ul>
+ * L'autorisation métier (RBAC) est appliquée ensuite par {@code RbacEnforcementFilter}
+ * via le catalogue live — le JWT ne doit pas embarquer la liste des permissions.
  */
 @Slf4j
 @Component

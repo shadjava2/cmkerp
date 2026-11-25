@@ -26,9 +26,9 @@ import lombok.extern.slf4j.Slf4j;
  * Charge les informations de l'utilisateur depuis UtilisateurRepository.
  *
  * <p>
- * Facebook-Grade : Les permissions sont chargées depuis le token JWT pour éviter
- * les requêtes DB à chaque requête. Si les permissions ne sont pas dans le token,
- * elles sont chargées depuis la base de données.
+ * L'identité vient du JWT ; l'autorisation métier est appliquée par
+ * {@code PermissionAuthorizationPort} / {@code RbacEnforcementFilter} (cache),
+ * pas par le claim permissions du token (volontairement absent pour limiter la taille cookie).
  */
 @Slf4j
 @Service
@@ -64,32 +64,28 @@ public class JwtUserDetailsService implements UserDetailsService {
   }
 
   /**
-   * Charge les détails d'un utilisateur avec les permissions depuis le token JWT.
+   * Charge les détails d'un utilisateur authentifié par JWT.
    *
    * <p>
-   * Facebook-Grade : Cette méthode extrait les permissions directement du token JWT,
-   * évitant ainsi une requête DB supplémentaire à chaque requête HTTP.
+   * Les authorities Spring peuvent être vides : le RBAC runtime lit le catalogue
+   * via {@code PermissionAuthorizationPort} (userId du token).
    *
    * @param username le nom d'utilisateur
-   * @param token le token JWT contenant les permissions
-   * @return UserDetails avec les permissions extraites du token
+   * @param token le token JWT d'identité
+   * @return UserDetails pour le SecurityContext
    */
   public UserDetails loadUserByUsernameWithToken(String username, String token) {
     Utilisateur utilisateur = utilisateurRepository.findByUsername(username)
         .orElseThrow(() -> new UsernameNotFoundException("Utilisateur non trouvé: " + username));
 
-    // Extraire les permissions depuis le token JWT
+    // Compatibilité tokens legacy qui embarquaient encore le claim "permissions"
     Set<String> permissions = jwtTokenProvider.getPermissionsFromToken(token);
-
-    // ✅ SECURITY SCOPE REDUCTION: Les permissions du token sont conservées mais ne sont plus utilisées pour l'autorisation
-    // On garde les permissions dans les authorities pour compatibilité (ne casse pas la génération du token)
-    // mais elles ne sont plus utilisées pour bloquer l'accès (AUTH uniquement, pas de RBAC/ACL)
     Collection<GrantedAuthority> authorities = permissions.stream()
-        .map(permission -> new SimpleGrantedAuthority(permission))
+        .map(SimpleGrantedAuthority::new)
         .collect(Collectors.toList());
 
     if (log.isDebugEnabled()) {
-      log.debug("Permissions chargées depuis le token pour {}: {}", username, permissions);
+      log.debug("JWT identité OK pour {} (authorities legacy={})", username, authorities.size());
     }
 
     return User.builder()

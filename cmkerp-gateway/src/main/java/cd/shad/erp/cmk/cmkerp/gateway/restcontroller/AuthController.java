@@ -158,10 +158,13 @@ public class AuthController {
           request.username());
     }
 
-    // ✅ CRITICAL: Retourner la réponse avec les cookies dans les headers
-    // Les cookies doivent être envoyés avec les bons attributs (Path, SameSite, Secure)
-    return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, accessCookie.toString())
-        .header(HttpHeaders.SET_COOKIE, refreshCookie.toString()).body(response);
+    // Cookies via add (pas replace) — access + refresh sur deux Set-Cookie distincts
+    return ResponseEntity.ok()
+        .headers(headers -> {
+          headers.add(HttpHeaders.SET_COOKIE, accessCookie.toString());
+          headers.add(HttpHeaders.SET_COOKIE, refreshCookie.toString());
+        })
+        .body(response);
   }
 
   /**

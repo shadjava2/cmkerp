@@ -253,6 +253,8 @@ server:
   address: 0.0.0.0
   # Port par défaut 8999 (aligné mobile / prod). Surcharge : CMK_SERVER_PORT ou --server.port=
   port: ${CMK_SERVER_PORT:8999}
+  # Filet de sécurité : cookies Set-Cookie + CORS (JWT identité seule, sans catalogue permissions)
+  max-http-header-size: 32KB
   ssl:
     enabled: false
 

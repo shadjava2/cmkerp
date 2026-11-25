@@ -10,9 +10,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -23,6 +28,10 @@ import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteG
 
 /**
  * Worker ERP → CLINIQUE Beach. SYNCED uniquement après relecture SQL Server.
+ *
+ * <p>Les mises à jour MySQL (claim / SYNCED / FAILED) passent en {@code REQUIRES_NEW}
+ * pour ne pas être annulées par un rollback de transaction ambiante (écriture Beach
+ * réussie sinon sans bascule de statut outbox).
  */
 @Component
 @ConditionalOnProperty(prefix = "clinic.beach", name = "sync-enabled", havingValue = "true")
@@ -38,6 +47,7 @@ public class ClinicBeachOutboxWorker {
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
   private final JdbcTemplate cliniqueJdbc;
+  private final TransactionTemplate requiresNewTx;
 
   public ClinicBeachOutboxWorker(
       ErpContratRepository repository,
@@ -45,6 +55,7 @@ public class ClinicBeachOutboxWorker {
       ClinicReferentialLegacyWriter referentialWriter,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
+      PlatformTransactionManager transactionManager,
       @Autowired(required = false) @Qualifier("cliniqueJdbcTemplate") JdbcTemplate cliniqueJdbc) {
     this.repository = repository;
     this.referentialRepository = referentialRepository;
@@ -52,72 +63,113 @@ public class ClinicBeachOutboxWorker {
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
     this.cliniqueJdbc = cliniqueJdbc;
+    this.requiresNewTx = new TransactionTemplate(transactionManager);
+    this.requiresNewTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+  }
+
+  @EventListener(ApplicationReadyEvent.class)
+  public void onReady() {
+    try {
+      int n = flushPendingBatch(50);
+      if (n > 0) {
+        log.info("Worker Beach : {} intention(s) traitée(s) au démarrage", n);
+      }
+    } catch (Exception ex) {
+      log.warn("Worker Beach démarrage : {}", ex.getMessage());
+    }
   }
 
   @Scheduled(fixedDelayString = "${clinic.beach.sync-interval-ms:15000}")
   public void process() {
+    flushPendingBatch(20);
+  }
+
+  /**
+   * Traite immédiatement un lot PENDING (appelé aussi après Valider rapprochement).
+   */
+  public int flushPendingBatch(int limit) {
     if (!writeGuard.beachSyncEnabled()) {
-      return;
+      return 0;
     }
     writeGuard.assertChWriteForbidden();
 
     var beach = writeGuard.properties().getBeach();
-    repository.reclaimStuckInProgress(beach.getStuckMinutes());
-    repository.requeueFailedReady(beach.getMaxAttempts());
+    requiresNewTx.executeWithoutResult(status -> {
+      repository.reclaimStuckInProgress(beach.getStuckMinutes());
+      repository.requeueFailedReady(beach.getMaxAttempts());
+    });
 
     if (!writeGuard.beachWriteEnabled()) {
       log.debug("Worker Beach : écritures désactivées — SUSPENDED / UNCERTAIN conservés");
-      return;
+      return 0;
     }
     if (cliniqueJdbc == null) {
       log.warn("Worker Beach : datasource CLINIQUE indisponible");
-      return;
+      return 0;
     }
 
-    // Promotion uniquement pour entités autorisées (TCONTRAT).
-    for (String entity : beach.writeEntitySet()) {
-      int promoted = repository.promoteSuspendedToPendingForEntity(entity);
-      if (promoted > 0) {
-        log.info("Worker Beach : {} intention(s) {} SUSPENDED → PENDING", promoted, entity);
+    requiresNewTx.executeWithoutResult(status -> {
+      for (String entity : beach.writeEntitySet()) {
+        int promoted = repository.promoteSuspendedToPendingForEntity(entity);
+        if (promoted > 0) {
+          log.info("Worker Beach : {} intention(s) {} SUSPENDED → PENDING", promoted, entity);
+        }
       }
-    }
+    });
 
-    // Relecture UNCERTAIN TCONTRAT avant nouvelle écriture.
     reconcileUncertainTcontrat();
 
-    List<Map<String, Object>> batch = repository.claimPendingOutbox(20);
+    List<Map<String, Object>> batch = requiresNewTx.execute(
+        status -> repository.claimPendingOutbox(Math.min(Math.max(limit, 1), 50)));
+    if (batch == null || batch.isEmpty()) {
+      return 0;
+    }
+    log.info("Worker Beach : {} intention(s) PENDING prises en charge", batch.size());
+    int done = 0;
     for (Map<String, Object> row : batch) {
       long id = ((Number) row.get("id")).longValue();
       String entity = String.valueOf(row.get("entityType"));
       try {
         if (!writeGuard.beachEntityWriteEnabled(entity)) {
-          repository.markOutboxFailed(id, "Entité non autorisée à l'écriture: " + entity);
+          requiresNewTx.executeWithoutResult(
+              status -> repository.markOutboxFailed(id, "Entité non autorisée à l'écriture: " + entity));
           continue;
         }
         if ("TCONTRAT".equalsIgnoreCase(entity)) {
           applyTcontrat(row);
-          verifyAndCompleteTcontrat(row);
+          requiresNewTx.executeWithoutResult(status -> verifyAndCompleteTcontrat(row));
         } else {
           applyReferential(row, entity);
-          repository.markOutboxSynced(id);
-          Object entityId = row.get("entityId");
-          if (entityId instanceof Number n) {
-            referentialRepository.markSynced(n.longValue(), String.valueOf(row.get("legacyKey")));
-          }
+          requiresNewTx.executeWithoutResult(status -> {
+            repository.markOutboxSynced(id);
+            Object entityId = row.get("entityId");
+            if (entityId instanceof Number n) {
+              referentialRepository.markSynced(n.longValue(), String.valueOf(row.get("legacyKey")));
+            }
+          });
         }
+        done++;
       } catch (Exception ex) {
-        log.warn("Worker Beach échec op={} : {}", row.get("operationId"), ex.getMessage());
-        if (looksUncertain(ex)) {
-          repository.markOutboxUncertain(id, ex.getMessage());
-        } else {
-          repository.markOutboxFailed(id, ex.getMessage());
-        }
+        log.warn("Worker Beach échec op={} key={} : {}", row.get("operationId"), row.get("legacyKey"),
+            ex.getMessage());
+        requiresNewTx.executeWithoutResult(status -> {
+          if (looksUncertain(ex)) {
+            repository.markOutboxUncertain(id, ex.getMessage());
+          } else {
+            repository.markOutboxFailed(id, ex.getMessage());
+          }
+        });
       }
     }
+    return done;
   }
 
   private void reconcileUncertainTcontrat() {
-    List<Map<String, Object>> uncertain = repository.listOutbox("UNCERTAIN", 20, 0);
+    List<Map<String, Object>> uncertain = requiresNewTx.execute(
+        status -> repository.listOutbox("UNCERTAIN", 20, 0));
+    if (uncertain == null) {
+      return;
+    }
     for (Map<String, Object> row : uncertain) {
       if (!"TCONTRAT".equalsIgnoreCase(String.valueOf(row.get("entityType")))) {
         continue;
@@ -127,18 +179,18 @@ public class ClinicBeachOutboxWorker {
       try {
         var beachDes = repository.findBeachDesignationVerified(cliniqueJdbc, code);
         if (beachDes.isEmpty()) {
-          // Pas trouvé — retenter plus tard
-          repository.markOutboxFailed(id, "UNCERTAIN: absent de CLINIQUE après écriture");
+          requiresNewTx.executeWithoutResult(
+              status -> repository.markOutboxFailed(id, "UNCERTAIN: absent de CLINIQUE après écriture"));
           continue;
         }
-        // Payload non disponible dans listOutbox — basculer PENDING pour re-vérification via claim
-        // On marque SYNCED si une désignation existe (preuve d'écriture) et aligne ERP.
-        Object entityId = row.get("entityId");
-        if (entityId instanceof Number n) {
-          String fp = ClinicContratFingerprint.of(code, beachDes.get());
-          repository.markContratSyncedWithFingerprint(n.longValue(), code, fp);
-        }
-        repository.markOutboxSynced(id);
+        requiresNewTx.executeWithoutResult(status -> {
+          Object entityId = row.get("entityId");
+          if (entityId instanceof Number n) {
+            String fp = ClinicContratFingerprint.of(code, beachDes.get());
+            repository.markContratSyncedWithFingerprint(n.longValue(), code, fp);
+          }
+          repository.markOutboxSynced(id);
+        });
       } catch (Exception ex) {
         log.debug("UNCERTAIN TCONTRAT {} : {}", code, ex.getMessage());
       }
@@ -188,25 +240,29 @@ public class ClinicBeachOutboxWorker {
     throw new IllegalStateException("Opération non supportée: " + op);
   }
 
-  private void verifyAndCompleteTcontrat(Map<String, Object> row) throws Exception {
+  private void verifyAndCompleteTcontrat(Map<String, Object> row) {
     long id = ((Number) row.get("id")).longValue();
-    JsonNode payload = objectMapper.readTree(String.valueOf(row.get("payloadJson")));
-    String code = payload.path("code").asText(null);
-    String expected = payload.path("designation").asText("");
-    var actual = repository.findBeachDesignationVerified(cliniqueJdbc, code);
-    if (actual.isEmpty()) {
-      repository.markOutboxUncertain(id, "Écriture non confirmée dans CLINIQUE");
-      return;
-    }
-    if (!Objects.equals(normalizeDes(expected), normalizeDes(actual.get()))) {
-      repository.markOutboxConflict(id, "Désignation CLINIQUE différente après écriture");
-      return;
-    }
-    repository.markOutboxSynced(id);
-    Object entityId = row.get("entityId");
-    if (entityId instanceof Number n) {
-      repository.markContratSyncedWithFingerprint(
-          n.longValue(), code, ClinicContratFingerprint.of(code, actual.get()));
+    try {
+      JsonNode payload = objectMapper.readTree(String.valueOf(row.get("payloadJson")));
+      String code = payload.path("code").asText(null);
+      String expected = payload.path("designation").asText("");
+      var actual = repository.findBeachDesignationVerified(cliniqueJdbc, code);
+      if (actual.isEmpty()) {
+        repository.markOutboxUncertain(id, "Écriture non confirmée dans CLINIQUE");
+        return;
+      }
+      if (!Objects.equals(normalizeDes(expected), normalizeDes(actual.get()))) {
+        repository.markOutboxConflict(id, "Désignation CLINIQUE différente après écriture");
+        return;
+      }
+      repository.markOutboxSynced(id);
+      Object entityId = row.get("entityId");
+      if (entityId instanceof Number n) {
+        repository.markContratSyncedWithFingerprint(
+            n.longValue(), code, ClinicContratFingerprint.of(code, actual.get()));
+      }
+    } catch (Exception ex) {
+      repository.markOutboxUncertain(id, ex.getMessage());
     }
   }
 

@@ -244,6 +244,38 @@ public class ErpContratRepository {
     return n != null && n > 0;
   }
 
+  /**
+   * Relance une intention ouverte (SUSPENDED / FAILED / UNCERTAIN) vers PENDING.
+   * Ne touche pas IN_PROGRESS.
+   */
+  public int requeueOpenOutboxToPending(long entityId, String entityType) {
+    return setOpenOutboxStatus(entityId, entityType, "PENDING");
+  }
+
+  /**
+   * Positionne le statut des intentions ouvertes (hors IN_PROGRESS) — même TX métier.
+   */
+  public int setOpenOutboxStatus(long entityId, String entityType, String status) {
+    String safe = status == null ? "PENDING" : status.trim().toUpperCase();
+    if (!"PENDING".equals(safe) && !"SUSPENDED".equals(safe)) {
+      throw new IllegalArgumentException("Statut outbox non supporté: " + status);
+    }
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = ?,
+                next_attempt_at = NULL,
+                last_error = NULL,
+                dateupdate = NOW()
+            WHERE entity_id = ?
+              AND entity_type = ?
+              AND status IN ('SUSPENDED', 'FAILED', 'UNCERTAIN', 'PENDING')
+            """,
+        safe,
+        entityId,
+        entityType);
+  }
+
   public List<ErpContratRecord> listBySourceSystem(String sourceSystem) {
     return jdbc.query(
         """
@@ -299,7 +331,7 @@ public class ErpContratRepository {
   }
 
   public List<Map<String, Object>> claimPendingOutbox(int limit) {
-    List<Map<String, Object>> rows = jdbc.query(
+    List<Map<String, Object>> candidates = jdbc.query(
         """
             SELECT id, operation_id, entity_type, entity_id, legacy_key, operation_type, payload_json,
                    status, attempt_count, correlation_id
@@ -323,16 +355,20 @@ public class ErpContratRepository {
           return row;
         },
         Math.min(Math.max(limit, 1), 50));
-    for (Map<String, Object> row : rows) {
-      jdbc.update(
+    List<Map<String, Object>> claimed = new java.util.ArrayList<>();
+    for (Map<String, Object> row : candidates) {
+      int updated = jdbc.update(
           """
               UPDATE erp_sync_outbox
               SET status = 'IN_PROGRESS', attempt_count = attempt_count + 1, dateupdate = NOW()
               WHERE id = ? AND status = 'PENDING'
               """,
           row.get("id"));
+      if (updated > 0) {
+        claimed.add(row);
+      }
     }
-    return rows;
+    return claimed;
   }
 
   public void markOutboxSynced(long id) {

@@ -81,7 +81,7 @@ public class ClinicReferentialService {
     boolean replicate = def.outboundInsert();
     String syncStatus = !replicate
         ? "LOCAL_ONLY"
-        : (writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED");
+        : (writeGuard.beachEntityWriteEnabled(def.entityType()) ? "PENDING" : "SUSPENDED");
     long id = repository.insert(
         def.code(),
         nk,
@@ -123,7 +123,7 @@ public class ClinicReferentialService {
     String operation = resolveOperation(def, current);
     String syncStatus = operation == null
         ? "LOCAL_ONLY"
-        : (writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED");
+        : (writeGuard.beachEntityWriteEnabled(def.entityType()) ? "PENDING" : "SUSPENDED");
     int updated = repository.updatePayload(
         def.code(),
         id,
@@ -381,7 +381,7 @@ public class ClinicReferentialService {
         operation,
         payload,
         UUID.randomUUID().toString(),
-        writeGuard.beachWriteEnabled() ? "PENDING" : "SUSPENDED");
+        writeGuard.beachEntityWriteEnabled(def.entityType()) ? "PENDING" : "SUSPENDED");
   }
 
   private String resolveOperation(Definition def, ClinicReferentialRecord current) {
@@ -498,7 +498,7 @@ public class ClinicReferentialService {
     if (def.mode() == Mode.PROJECTION) {
       return "LECTURE_SEULE";
     }
-    if (def.mode() == Mode.IMPORT_ONLY || !writeGuard.beachWriteEnabled()) {
+    if (def.mode() == Mode.IMPORT_ONLY || !writeGuard.beachEntityWriteEnabled(def.entityType())) {
       return "CLINIQUE_TO_ERP";
     }
     return "BIDIRECTIONAL_GATED";

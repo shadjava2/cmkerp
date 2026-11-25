@@ -99,17 +99,9 @@ public class JwtTokenProviderImpl implements JwtTokenProvider {
 
   @Override
   public String generateAccessToken(UserPermissions userPermissions) {
-    Map<String, Object> claims = new HashMap<>();
-    claims.put("userId", userPermissions.getUserId());
-    claims.put("roleId", userPermissions.getRoleId());
-    claims.put("username", userPermissions.getUsername());
-    claims.put("locked", userPermissions.isLocked());
-
-    // Facebook-Grade : Inclure les permissions dans le token pour éviter les requêtes DB à chaque requête
-    // Les permissions sont stockées comme une liste de strings dans le claim "permissions"
-    if (userPermissions.getPermissions() != null && !userPermissions.getPermissions().isEmpty()) {
-      claims.put("permissions", new java.util.ArrayList<>(userPermissions.getPermissions()));
-    }
+    // Identité seule dans le JWT — permissions via PermissionAuthorizationPort (cache),
+    // sinon Set-Cookie dépasse maxHttpHeaderSize dès que le catalogue RBAC grossit.
+    Map<String, Object> claims = identityClaims(userPermissions);
 
     return Jwts.builder().claims(claims).subject(userPermissions.getUsername()).issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + accessTokenExpiration))
@@ -152,16 +144,7 @@ public class JwtTokenProviderImpl implements JwtTokenProvider {
    * @return le token JWT d'accès
    */
   public String generateAccessToken(UserPermissions userPermissions, boolean rememberMe) {
-    Map<String, Object> claims = new HashMap<>();
-    claims.put("userId", userPermissions.getUserId());
-    claims.put("roleId", userPermissions.getRoleId());
-    claims.put("username", userPermissions.getUsername());
-    claims.put("locked", userPermissions.isLocked());
-
-    // Facebook-Grade : Inclure les permissions dans le token pour éviter les requêtes DB à chaque requête
-    if (userPermissions.getPermissions() != null && !userPermissions.getPermissions().isEmpty()) {
-      claims.put("permissions", new java.util.ArrayList<>(userPermissions.getPermissions()));
-    }
+    Map<String, Object> claims = identityClaims(userPermissions);
 
     long expiration = rememberMe
         ? REMEMBER_ME_ACCESS_TOKEN_EXPIRATION
@@ -170,6 +153,15 @@ public class JwtTokenProviderImpl implements JwtTokenProvider {
     return Jwts.builder().claims(claims).subject(userPermissions.getUsername()).issuedAt(new Date())
         .expiration(new Date(System.currentTimeMillis() + expiration))
         .signWith(getSigningKey()).compact();
+  }
+
+  private static Map<String, Object> identityClaims(UserPermissions userPermissions) {
+    Map<String, Object> claims = new HashMap<>();
+    claims.put("userId", userPermissions.getUserId());
+    claims.put("roleId", userPermissions.getRoleId());
+    claims.put("username", userPermissions.getUsername());
+    claims.put("locked", userPermissions.isLocked());
+    return claims;
   }
 
   @Override

@@ -1,13 +1,19 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,12 +24,15 @@ import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteG
 @Service
 public class ErpContratService {
 
+  private static final Logger log = LoggerFactory.getLogger(ErpContratService.class);
+
   private final ErpContratRepository repository;
   private final ClinicContratLegacyReader legacyReader;
   private final ClinicReferentialService referentialService;
   private final ClinicContratSyncEngine syncEngine;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
+  private final ObjectProvider<ClinicBeachOutboxWorker> outboxWorker;
 
   public ErpContratService(
       ErpContratRepository repository,
@@ -31,13 +40,15 @@ public class ErpContratService {
       ClinicReferentialService referentialService,
       ClinicContratSyncEngine syncEngine,
       ClinicLegacyWriteGuard writeGuard,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ObjectProvider<ClinicBeachOutboxWorker> outboxWorker) {
     this.repository = repository;
     this.legacyReader = legacyReader;
     this.referentialService = referentialService;
     this.syncEngine = syncEngine;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
+    this.outboxWorker = outboxWorker;
   }
 
   public Map<String, Object> list(String q, Boolean actif, int page, int size) {
@@ -58,6 +69,10 @@ public class ErpContratService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contrat introuvable"));
   }
 
+  /**
+   * Création ERP + intention outbox dans la <strong>même</strong> transaction MySQL.
+   * Le flush worker (écritures Beach) n'intervient qu'après commit.
+   */
   @Transactional
   public ErpContratRecord create(String code, String designation, Long userId) {
     String normalized = ErpContratRepository.normalizeCode(code);
@@ -72,9 +87,13 @@ public class ErpContratService {
     long id = repository.insert(normalized, designation, true, "OPERATION_ERP", null, syncStatus, userId);
     repository.updateFingerprint(id, ClinicContratFingerprint.of(normalized, designation));
     enqueueReplication(id, normalized, designation, "INSERT", userId);
+    scheduleOutboxFlushAfterCommit();
     return get(id);
   }
 
+  /**
+   * Mise à jour ERP + intention outbox atomiques MySQL ; flush Beach après commit uniquement.
+   */
   @Transactional
   public ErpContratRecord update(long id, String designation, int version, Long userId) {
     ErpContratRecord current = get(id);
@@ -91,6 +110,7 @@ public class ErpContratService {
     String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     repository.updateSyncStatus(id, syncStatus);
     repository.updateFingerprint(id, ClinicContratFingerprint.of(current.code(), designation));
+    scheduleOutboxFlushAfterCommit();
     return get(id);
   }
 
@@ -383,9 +403,50 @@ public class ErpContratService {
     return syncEngine.history(status, entityType, q, page, size);
   }
 
-  @Transactional
   public Map<String, Object> applyOutbound(List<String> codes, Long userId) {
-    return syncEngine.applyOutbound(codes, userId);
+    // TX métier (PENDING) commitée dans syncEngine ; flush worker ensuite (hors TX initiale).
+    Map<String, Object> result = syncEngine.applyOutbound(codes, userId);
+    return withOutboxFlush(result);
+  }
+
+  private Map<String, Object> withOutboxFlush(Map<String, Object> result) {
+    int flushed = flushOutboxQuietly();
+    Map<String, Object> out = new LinkedHashMap<>(result);
+    out.put("flushed", flushed);
+    return out;
+  }
+
+  /**
+   * Après commit MySQL uniquement : le worker peut écrire Beach sans risquer un rollback
+   * de l'intention / de la fiche ERP.
+   */
+  private void scheduleOutboxFlushAfterCommit() {
+    if (!writeGuard.beachEntityWriteEnabled("TCONTRAT")) {
+      return;
+    }
+    if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+      flushOutboxQuietly();
+      return;
+    }
+    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+      @Override
+      public void afterCommit() {
+        flushOutboxQuietly();
+      }
+    });
+  }
+
+  private int flushOutboxQuietly() {
+    ClinicBeachOutboxWorker worker = outboxWorker.getIfAvailable();
+    if (worker == null || !writeGuard.beachEntityWriteEnabled("TCONTRAT")) {
+      return 0;
+    }
+    try {
+      return worker.flushPendingBatch(50);
+    } catch (Exception ex) {
+      log.warn("Flush outbox Beach : {}", ex.getMessage());
+      return 0;
+    }
   }
 
   @Transactional
@@ -427,15 +488,17 @@ public class ErpContratService {
   }
 
   /**
-   * Journalise l'intention même si les écritures Beach sont désactivées (statut SUSPENDED).
-   * Aucune écriture SQL Server ici.
+   * Journalise l'intention dans la transaction appelante (même TX que insert/update ERP).
+   * Aucune écriture SQL Server ici. Si une intention ouverte existe, elle est relancée
+   * sans doublon (PENDING si write on, SUSPENDED si write off).
    */
   private void enqueueReplication(long id, String code, String designation, String op, Long userId) {
     writeGuard.assertChWriteForbidden();
+    String status = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     if (repository.hasOpenOutbox(id, "TCONTRAT")) {
+      repository.setOpenOutboxStatus(id, "TCONTRAT", status);
       return;
     }
-    String status = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
     try {
       Map<String, Object> payload = new HashMap<>();
       payload.put("code", code);
