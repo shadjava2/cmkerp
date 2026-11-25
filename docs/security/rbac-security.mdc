@@ -1,0 +1,58 @@
+---
+description: Contrat RBAC obligatoire CMK ERP — permissions dynamiques, hiérarchiques, centralisées
+alwaysApply: true
+---
+
+# RBAC SECURITY CONTRACT — MANDATORY
+
+Toute création, modification ou suppression d'une fonctionnalité protégée dans CMK ERP doit inclure l'analyse de ses implications RBAC.
+
+## Principes non négociables
+
+1. **Code = déclaration + contrôle.** Le code déclare la permission nécessaire (`@RequirePermission`, `PermissionGate`, `can(...)`) et refuse l'accès par défaut.
+2. **DB = source de vérité des attributions.** Aucune attribution métier (« médecin peut X ») ne doit être codée en dur. Toute attribution passe par `roles_permissions`.
+3. **ADMIN (id=5)** est un rôle système protégé, synchronisé automatiquement avec le catalogue. Jamais modifiable depuis l'UI/API métier.
+4. **Frontend ≠ sécurité.** Masquer un bouton ne suffit jamais ; l'API doit vérifier.
+5. **Hiérarchie `permissions.parent`** : cascade UI d'administration uniquement (cocher/décocher). Une permission parente n'autorise **jamais** implicitement une action enfant non attribuée — ni en frontend (`PermissionGate` / menus), ni en API (`ApiPermissionCatalog` / `@RequirePermission`).
+6. **Refuse by default** : permission absente, inconnue, retirée, utilisateur désactivé, moteur indisponible → accès refusé.
+7. **Interdit** : `hasAny(MODULE_X, SIDEBAR_Y)` pour afficher un menu enfant ; le menu exige sa permission `SIDEBAR_*` / action `*_CREATE` explicite. `MODULE_*` ouvre uniquement la zone module.
+
+## Definition of Done — nouvelle fonctionnalité
+
+- [ ] Inventoriée dans `docs/security/RBAC_INVENTORY.md`
+- [ ] Permission unique déclarée ou réutilisée (`MODULE_DOMAINE_RESSOURCE_ACTION`)
+- [ ] Parent hiérarchique correct
+- [ ] Migration SQL versionnée (ou seed via `RbacSchemaInitializer` si Flyway off)
+- [ ] Attribution automatique ADMIN vérifiée
+- [ ] Visibilité frontend conditionnée (`PermissionGate` / `can`)
+- [ ] Route frontend protégée
+- [ ] Endpoint / service backend sécurisé
+- [ ] Révocation session prise en charge (403 + invalidation cache)
+- [ ] Tests d'autorisation
+- [ ] Documentation RBAC actualisée
+
+## Interdit
+
+```java
+if (role.equals("MEDECIN")) { ... }
+if (roleId == 12) { ... }
+if (username.equals("admin") || userId == 1) { ... }
+```
+
+Remplacer par `hasPermission(code)` / `@RequirePermission("CODE")`.
+
+## Catalogue
+
+- Tables : `permissions`, `roles`, `roles_permissions`
+- Ne jamais créer un second référentiel d'autorisation
+- Ne jamais hardcoder un `id` de permission dans le frontend ou les contrôleurs
+
+## Contrôle bloquant CI
+
+Le script `cmkerp/scripts/rbac-compliance-check.sh` est exécuté en CI et **échoue** si :
+
+- hardcode utilisateur nominatif
+- contrôle `role.equals` / `userId == 1` métier
+- absence du catalogue API ou du filtre d'enforcement
+
+Aucune fonctionnalité n'est terminée sans couverture RBAC complète (permission + API + UI + inventaire).
