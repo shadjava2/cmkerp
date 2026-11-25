@@ -1705,6 +1705,40 @@ public class ErpFacturationRelationalStore {
     return list.stream().findFirst().orElse(null);
   }
 
+  public long countPrestations() {
+    Long n = jdbc.queryForObject("SELECT COUNT(*) FROM erp_facturation_prestations", Long.class);
+    return n == null ? 0L : n;
+  }
+
+  public long countMedicaments() {
+    Long n = jdbc.queryForObject("SELECT COUNT(*) FROM erp_facturation_medicaments", Long.class);
+    return n == null ? 0L : n;
+  }
+
+  public boolean existsPrestationLegacy(String legacyId) {
+    String c = trim(legacyId);
+    if (c == null || c.isBlank()) {
+      return false;
+    }
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM erp_facturation_prestations WHERE legacy_id = ?",
+        Long.class,
+        c);
+    return n != null && n > 0;
+  }
+
+  public boolean existsMedicamentLegacy(String legacyId) {
+    String c = trim(legacyId);
+    if (c == null || c.isBlank()) {
+      return false;
+    }
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM erp_facturation_medicaments WHERE legacy_id = ?",
+        Long.class,
+        c);
+    return n != null && n > 0;
+  }
+
   public int upsertPrestationHistory(
       String legacyId,
       String idmvt,

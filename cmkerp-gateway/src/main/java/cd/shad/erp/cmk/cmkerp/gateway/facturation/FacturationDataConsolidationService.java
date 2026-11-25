@@ -164,6 +164,7 @@ public class FacturationDataConsolidationService {
   }
 
   /** Import historique TPRESTATION → erp_facturation_prestations. Pas d'outbox. */
+  @Transactional
   public Map<String, Object> importHistoricalPrestations(String from, String to, int limit, int offset) {
     writeGuard.assertChWriteForbidden();
     Definition def = ClinicReferentialCatalog.byKey("prestations")
@@ -173,10 +174,13 @@ public class FacturationDataConsolidationService {
     }
     int safeLimit = Math.min(Math.max(limit, 1), 500);
     int safeOffset = Math.max(offset, 0);
+    long countBefore = store.countPrestations();
     List<Map<String, Object>> rows = pageBeachByDate(def, from, to, safeOffset, safeLimit, "DATEPRES");
     int imported = 0;
     int updated = 0;
     int failed = 0;
+    List<String> sampleLegacyIds = new ArrayList<>();
+    List<String> failureSamples = new ArrayList<>();
     for (Map<String, Object> row : rows) {
       try {
         Object idmvtRaw = row.get("IDMVT");
@@ -185,6 +189,9 @@ public class FacturationDataConsolidationService {
           continue;
         }
         String legacyId = String.valueOf(idmvtRaw).trim();
+        if (sampleLegacyIds.size() < 5) {
+          sampleLegacyIds.add(legacyId);
+        }
         String matricule = trim(row.get("MATRICULE"));
         Long ayantId = store.findAyantIdByMatricule(matricule);
         Long societeId = store.findSocieteId(trim(row.get("CODESOC")));
@@ -218,21 +225,38 @@ public class FacturationDataConsolidationService {
             datePres,
             snapshot,
             fingerprint);
-        if (n == 1) {
-          imported++;
+        // MySQL CLIENT_FOUND_ROWS : 1 = insert OU update sans changement ; 2 = update modifié.
+        if (store.existsPrestationLegacy(legacyId)) {
+          if (n == 2) {
+            updated++;
+          } else {
+            imported++;
+          }
         } else {
-          updated++;
+          failed++;
+          if (failureSamples.size() < 5) {
+            failureSamples.add(legacyId + ":upsertReturned=" + n);
+          }
         }
       } catch (RuntimeException ex) {
         failed++;
+        if (failureSamples.size() < 5) {
+          failureSamples.add(String.valueOf(ex.getMessage()));
+        }
       }
     }
+    long countAfter = store.countPrestations();
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("entity", "TPRESTATION");
     result.put("requested", rows.size());
     result.put("insertedOrFirstWrite", imported);
     result.put("upserted", updated);
     result.put("failed", failed);
+    result.put("countBefore", countBefore);
+    result.put("countAfter", countAfter);
+    result.put("delta", countAfter - countBefore);
+    result.put("sampleLegacyIds", sampleLegacyIds);
+    result.put("failureSamples", failureSamples);
     result.put("offset", safeOffset);
     result.put("limit", safeLimit);
     result.put("from", from);
@@ -243,6 +267,7 @@ public class FacturationDataConsolidationService {
   }
 
   /** Import historique TMEDICAMENT → erp_facturation_medicaments. Pas d'outbox, pas de stock double. */
+  @Transactional
   public Map<String, Object> importHistoricalMedicaments(String from, String to, int limit, int offset) {
     writeGuard.assertChWriteForbidden();
     Definition def = ClinicReferentialCatalog.byKey("medicaments")
@@ -252,10 +277,13 @@ public class FacturationDataConsolidationService {
     }
     int safeLimit = Math.min(Math.max(limit, 1), 500);
     int safeOffset = Math.max(offset, 0);
+    long countBefore = store.countMedicaments();
     List<Map<String, Object>> rows = pageBeachByDate(def, from, to, safeOffset, safeLimit, "DATEMVT");
     int imported = 0;
     int updated = 0;
     int failed = 0;
+    List<String> sampleLegacyIds = new ArrayList<>();
+    List<String> failureSamples = new ArrayList<>();
     for (Map<String, Object> row : rows) {
       try {
         Object idmRaw = row.get("IDM");
@@ -264,6 +292,9 @@ public class FacturationDataConsolidationService {
           continue;
         }
         String legacyId = String.valueOf(idmRaw).trim();
+        if (sampleLegacyIds.size() < 5) {
+          sampleLegacyIds.add(legacyId);
+        }
         String matricule = trim(row.get("MATRICULE"));
         String productCode = trim(row.get("CODEPROD"));
         String pharmacyCode = trim(row.get("CODEPHARM"));
@@ -287,21 +318,37 @@ public class FacturationDataConsolidationService {
             timestampOf(row.get("DATEMVT")),
             writeJson(row),
             sha256(legacyId + "|" + row.get("MONTANT") + "|" + row.get("DATEMVT")));
-        if (n == 1) {
-          imported++;
+        if (store.existsMedicamentLegacy(legacyId)) {
+          if (n == 2) {
+            updated++;
+          } else {
+            imported++;
+          }
         } else {
-          updated++;
+          failed++;
+          if (failureSamples.size() < 5) {
+            failureSamples.add(legacyId + ":upsertReturned=" + n);
+          }
         }
       } catch (RuntimeException ex) {
         failed++;
+        if (failureSamples.size() < 5) {
+          failureSamples.add(String.valueOf(ex.getMessage()));
+        }
       }
     }
+    long countAfter = store.countMedicaments();
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("entity", "TMEDICAMENT");
     result.put("requested", rows.size());
     result.put("insertedOrFirstWrite", imported);
     result.put("upserted", updated);
     result.put("failed", failed);
+    result.put("countBefore", countBefore);
+    result.put("countAfter", countAfter);
+    result.put("delta", countAfter - countBefore);
+    result.put("sampleLegacyIds", sampleLegacyIds);
+    result.put("failureSamples", failureSamples);
     result.put("offset", safeOffset);
     result.put("limit", safeLimit);
     result.put("stockMovement", "NONE");
