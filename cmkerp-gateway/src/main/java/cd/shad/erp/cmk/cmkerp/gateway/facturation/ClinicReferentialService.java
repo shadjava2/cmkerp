@@ -4,7 +4,9 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.dao.DataAccessException;
@@ -20,7 +22,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ClinicReferentialCatalog.Definition;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ClinicReferentialCatalog.Mode;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ClinicReferentialRepository.Snap;
+import cd.shad.erp.cmk.cmkerp.platform.dto.response.SiteResponse;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteGuard;
+import cd.shad.erp.cmk.cmkerp.platform.site.application.service.SiteQueryService;
 
 @Service
 public class ClinicReferentialService {
@@ -28,19 +32,25 @@ public class ClinicReferentialService {
   private static final TypeReference<LinkedHashMap<String, Object>> MAP_TYPE = new TypeReference<>() {
   };
 
+  /** Champs ERP locaux — jamais répliqués vers SQL Server CLINIQUE. */
+  private static final Set<String> ERP_OVERLAY_KEYS = Set.of("SITEID", "SITE_ID");
+
   private final ClinicReferentialRepository repository;
   private final ClinicReferentialLegacyReader legacyReader;
   private final ClinicLegacyWriteGuard writeGuard;
+  private final SiteQueryService siteQueryService;
   private final ObjectMapper objectMapper;
 
   public ClinicReferentialService(
       ClinicReferentialRepository repository,
       ClinicReferentialLegacyReader legacyReader,
       ClinicLegacyWriteGuard writeGuard,
+      SiteQueryService siteQueryService,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.legacyReader = legacyReader;
     this.writeGuard = writeGuard;
+    this.siteQueryService = siteQueryService;
     this.objectMapper = objectMapper;
   }
 
@@ -72,12 +82,14 @@ public class ClinicReferentialService {
   public Map<String, Object> create(String key, String naturalKey, Map<String, Object> fields, Long userId) {
     Definition def = require(key);
     assertMutable(def);
+    Map<String, Object> overlays = extractOverlays(fields);
     Map<String, Object> normalized = ClinicReferentialValues.normalize(
-        def, bindKey(def, naturalKey, fields), true, true);
+        def, bindKey(def, naturalKey, stripOverlays(fields)), true, true);
     String nk = ClinicReferentialValues.naturalKey(def, normalized);
     if (repository.findByNaturalKey(def.code(), nk).isPresent()) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Cet élément existe déjà.");
     }
+    Map<String, Object> payload = mergeOverlays(normalized, overlays);
     boolean replicate = def.outboundInsert();
     String syncStatus = !replicate
         ? "LOCAL_ONLY"
@@ -86,7 +98,7 @@ public class ClinicReferentialService {
         def.code(),
         nk,
         displayLabel(def, normalized),
-        writeJson(normalized),
+        writeJson(payload),
         ClinicReferentialValues.fingerprint(def, normalized),
         true,
         "OPERATION_ERP",
@@ -118,7 +130,9 @@ public class ClinicReferentialService {
       }
     }
     merged.put(def.keyColumn(), current.naturalKey());
-    Map<String, Object> normalized = ClinicReferentialValues.normalize(def, merged, true, true);
+    Map<String, Object> overlays = extractOverlays(merged);
+    Map<String, Object> normalized = ClinicReferentialValues.normalize(def, stripOverlays(merged), true, true);
+    Map<String, Object> payload = mergeOverlays(normalized, overlays);
     String fingerprint = ClinicReferentialValues.fingerprint(def, normalized);
     String operation = resolveOperation(def, current);
     String syncStatus = operation == null
@@ -128,7 +142,7 @@ public class ClinicReferentialService {
         def.code(),
         id,
         displayLabel(def, normalized),
-        writeJson(normalized),
+        writeJson(payload),
         fingerprint,
         syncStatus,
         version,
@@ -140,6 +154,23 @@ public class ClinicReferentialService {
       enqueue(def, id, current.naturalKey(), normalized, operation);
     }
     return toView(requireRow(def, id));
+  }
+
+  public List<Map<String, Object>> listErpSites(String key) {
+    Definition def = require(key);
+    if (!"locations".equals(def.key())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Association site disponible uniquement pour les locations.");
+    }
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (SiteResponse site : siteQueryService.findAll()) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", site.getId());
+      row.put("designation", site.getDesignation());
+      row.put("abbreviation", site.getAbbreviation());
+      row.put("adresse", site.getAdresse());
+      out.add(row);
+    }
+    return out;
   }
 
   @Transactional
@@ -312,10 +343,68 @@ public class ClinicReferentialService {
       item.put("clinicCount", clinicCount);
       item.put("pending", pending);
       item.put("suspended", suspended);
+      item.put("failed", outbox.getOrDefault("FAILED", 0L));
+      item.put("inProgress", inProgress);
+      enrichCompareCounters(def, item, erpCount, clinicCount, clinicFailed);
       item.put("state", supervisionState(erpFailed, clinicFailed, erpCount, clinicCount, pending, suspended, inProgress));
       rows.add(item);
     }
     return rows;
+  }
+
+  private void enrichCompareCounters(
+      Definition def,
+      Map<String, Object> item,
+      Long erpCount,
+      Integer clinicCount,
+      boolean clinicFailed) {
+    item.put("erpOnly", null);
+    item.put("clinicOnly", null);
+    item.put("matched", null);
+    item.put("divergences", null);
+    if (clinicFailed || erpCount == null || clinicCount == null) {
+      return;
+    }
+    if (clinicCount > ClinicReferentialCatalog.FULL_COMPARE_LIMIT) {
+      return;
+    }
+    try {
+      List<Map<String, Object>> rows = clinicCount == 0
+          ? List.of()
+          : legacyReader.page(def, null, 0, clinicCount);
+      Map<String, Snap> erp = repository.index(def.code());
+      int clinicOnly = 0;
+      int matched = 0;
+      int divergences = 0;
+      LinkedHashSet<String> seen = new LinkedHashSet<>();
+      for (Map<String, Object> row : rows) {
+        Map<String, Object> normalized = ClinicReferentialValues.normalize(def, row, false, false);
+        String nk = ClinicReferentialValues.naturalKey(def, normalized);
+        seen.add(nk);
+        Snap snap = erp.get(nk);
+        if (snap == null) {
+          clinicOnly++;
+          continue;
+        }
+        if (ClinicReferentialValues.fingerprint(def, normalized).equals(snap.fingerprint())) {
+          matched++;
+        } else {
+          divergences++;
+        }
+      }
+      int erpOnly = 0;
+      for (String key : erp.keySet()) {
+        if (!seen.contains(key)) {
+          erpOnly++;
+        }
+      }
+      item.put("erpOnly", erpOnly);
+      item.put("clinicOnly", clinicOnly);
+      item.put("matched", matched);
+      item.put("divergences", divergences);
+    } catch (DataAccessException | ResponseStatusException ex) {
+      // Compteurs détaillés optionnels — ne pas faire échouer le centre.
+    }
   }
 
   private void annotateWindow(Definition def, List<Map<String, Object>> window, Map<String, Object> report) {
@@ -476,6 +565,66 @@ public class ClinicReferentialService {
       merged.put(def.keyColumn(), naturalKey.trim());
     }
     return merged;
+  }
+
+  private static boolean isOverlayKey(String name) {
+    if (name == null || name.isBlank()) {
+      return false;
+    }
+    return ERP_OVERLAY_KEYS.contains(name.trim().toUpperCase(Locale.ROOT).replace("-", "_"));
+  }
+
+  private Map<String, Object> extractOverlays(Map<String, Object> fields) {
+    Map<String, Object> overlays = new LinkedHashMap<>();
+    if (fields == null) {
+      return overlays;
+    }
+    for (Map.Entry<String, Object> entry : fields.entrySet()) {
+      if (!isOverlayKey(entry.getKey())) {
+        continue;
+      }
+      Object raw = entry.getValue();
+      if (raw == null || (raw instanceof String text && text.isBlank())) {
+        overlays.put("siteId", null);
+        continue;
+      }
+      try {
+        long siteId = raw instanceof Number number ? number.longValue() : Long.parseLong(String.valueOf(raw).trim());
+        if (siteId <= 0) {
+          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Site ERP invalide.");
+        }
+        siteQueryService.findById(siteId);
+        overlays.put("siteId", siteId);
+      } catch (NumberFormatException ex) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Site ERP invalide.");
+      }
+    }
+    return overlays;
+  }
+
+  private static Map<String, Object> stripOverlays(Map<String, Object> fields) {
+    if (fields == null || fields.isEmpty()) {
+      return Map.of();
+    }
+    Map<String, Object> cleaned = new LinkedHashMap<>();
+    for (Map.Entry<String, Object> entry : fields.entrySet()) {
+      if (!isOverlayKey(entry.getKey())) {
+        cleaned.put(entry.getKey(), entry.getValue());
+      }
+    }
+    return cleaned;
+  }
+
+  private static Map<String, Object> mergeOverlays(Map<String, Object> beachFields, Map<String, Object> overlays) {
+    Map<String, Object> payload = new LinkedHashMap<>(beachFields);
+    if (overlays != null && !overlays.isEmpty()) {
+      if (overlays.containsKey("siteId") && overlays.get("siteId") == null) {
+        payload.remove("siteId");
+      } else {
+        payload.putAll(overlays);
+      }
+    }
+    return payload;
   }
 
   private static String displayLabel(Definition def, Map<String, Object> normalized) {

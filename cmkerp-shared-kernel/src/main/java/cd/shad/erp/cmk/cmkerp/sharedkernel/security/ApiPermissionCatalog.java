@@ -199,6 +199,7 @@ public final class ApiPermissionCatalog {
     String importPerm = prefix + "_IMPORT";
     String status = prefix + "_STATUS_UPDATE";
     rule("GET", base + "/import/candidates", importPerm, "FACTURATION_SYNC_DRY_RUN", "FACTURATION_SYNC_IMPORT");
+    rule("GET", base + "/erp-sites", view, prefix + "_UPDATE", prefix + "_CREATE");
     rule("GET", base, view, sidebar);
     rule("POST", base + "/import/selected", importPerm, "FACTURATION_SYNC_IMPORT");
     rule("POST", base + "/import/dry-run", importPerm, "FACTURATION_SYNC_DRY_RUN");

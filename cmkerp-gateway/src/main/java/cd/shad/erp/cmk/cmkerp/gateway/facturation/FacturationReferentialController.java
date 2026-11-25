@@ -76,6 +76,11 @@ public class FacturationReferentialController {
     return ResponseEntity.ok(service.setActif(key, id, actif, intVal(body.get("version"), 1), userId));
   }
 
+  @GetMapping("/{key}/erp-sites")
+  public ResponseEntity<List<Map<String, Object>>> erpSites(@PathVariable String key) {
+    return ResponseEntity.ok(service.listErpSites(key));
+  }
+
   @GetMapping("/{key}/import/candidates")
   public ResponseEntity<Map<String, Object>> importCandidates(
       @PathVariable String key,

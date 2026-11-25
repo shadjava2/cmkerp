@@ -37,4 +37,17 @@ class OutboxTransactionBoundaryTest {
     assertTrue(create.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
     assertTrue(update.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
   }
+
+  @Test
+  void referentialServiceKeepsCreateUpdateImportInRequiredTransaction() throws Exception {
+    var create = ClinicReferentialService.class.getMethod(
+        "create", String.class, String.class, java.util.Map.class, Long.class);
+    var update = ClinicReferentialService.class.getMethod(
+        "update", String.class, long.class, java.util.Map.class, int.class, Long.class);
+    var importSelected = ClinicReferentialService.class.getMethod(
+        "importSelected", String.class, java.util.List.class);
+    assertTrue(create.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+    assertTrue(update.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+    assertTrue(importSelected.isAnnotationPresent(org.springframework.transaction.annotation.Transactional.class));
+  }
 }
