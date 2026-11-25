@@ -3,20 +3,20 @@
 | Table Beach | Cible MySQL | Statut |
 | --- | --- | --- |
 | `TCONTRAT` | `erp_contrats` | Opérationnel (import + CRUD ERP) |
-| `TSOCIETE` | `erp_societes` | Planifié Lot 2 |
-| `TSERVICE` | `erp_services` | Planifié Lot 1 |
-| `TCLASSE` | `erp_classes` | Planifié Lot 2 — SERVICE = texte, pas code |
-| `TIMPUTATION` | `erp_imputations` | Planifié Lot 1 |
-| `TARIF` | `erp_tarifs` | Planifié Lot 2 — montants DECIMAL |
-| `TLOCATION` | `erp_locations` / mapping `sites` | Menu structuré |
-| `TUTILISATEUR` | mapping `utilisateurs` | Sans MOTDEPASSE |
-| `TPHARMACIE` | mapping `pharmacies` | Lot 3 |
-| `TPRODUIT` | référentiel produit ERP | Lot 3 |
-| `TSTOCK` | projection normalisée | Lecture seule Lot 4 |
-| `TMEDICAMENT` | `erp_facturation_medicaments` | Lot 5 |
-| `TPRESTATION` | `erp_facturation_prestations` | Lot 5 |
-| `TMEDECIN` | référentiel / `erp_medecins` | Audit schéma requis |
-| `TAYANTDROIT` | `erp_ayants_droit` | Audit schéma requis |
+| `TSOCIETE` | `erp_clinic_referentials` / `SOCIETES` | Moteur V31 — CODESOC, NOMSOC, ADRESSE, N_IMPOT, NRC, ID_NAT, CONTRAT |
+| `TSERVICE` | `erp_clinic_referentials` / `SERVICES` | Moteur V31 — CODE(2), LIBELLE |
+| `TCLASSE` | `erp_clinic_referentials` / `CLASSES` | Moteur V31 — SERVICE = texte |
+| `TIMPUTATION` | `erp_clinic_referentials` / `IMPUTATIONS` | Moteur V31 — CODE(7), DESIGNATION |
+| `TARIF` | `erp_clinic_referentials` / `TARIFS` | Moteur V31 — CODEPRES, LIBPRES, MONTANT, MONTPRIVE |
+| `TLOCATION` | `erp_clinic_referentials` / `LOCATIONS` | Moteur V31 — CODE entier, LIBELLE, ADRESSE |
+| `TUTILISATEUR` | `erp_clinic_referentials` / `UTILISATEURS` | Moteur V31 — CODE, NOM, CATEGORIE, LOCATION. Mot de passe jamais lu |
+| `TPHARMACIE` | `erp_clinic_referentials` / `PHARMACIES` | Moteur V31 — CODE, LIBELLE |
+| `TPRODUIT` | `erp_clinic_referentials` / `PRODUITS` | Moteur V31 — fiche produit. Écriture Beach distincte du sync stock existant |
+| `TSTOCK` | `erp_clinic_referentials` / `STOCK` | Projection en lecture. Aucune écriture sortante |
+| `TMEDICAMENT` | `erp_clinic_referentials` / `MEDICAMENTS` | Import sélectif seul. Pas d'écriture sortante |
+| `TPRESTATION` | `erp_clinic_referentials` / `PRESTATIONS` | Import sélectif seul. Pas d'écriture sortante |
+| `TMEDECIN` | `erp_clinic_referentials` / `MEDECINS` | Moteur V31 — CODE, NOM, SPECIALITE, CODECMK, NBREPATIENT |
+| `TAYANTDROIT` | `erp_clinic_referentials` / `AYANTS_DROIT` | Moteur V31 — MATRICULE et colonnes d'identité |
 
 ## TCONTRAT (confirmé)
 

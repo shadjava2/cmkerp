@@ -92,4 +92,25 @@ class ApiPermissionCatalogTest {
     assertTrue(ApiPermissionCatalog.match("GET", "/api/v1/stocks/facturation-sync").isPresent());
     assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/stocks/facturation-sync/apply").isPresent());
   }
+
+  @Test
+  void facturationReferentialsAreCoveredPerKey() {
+    var services = ApiPermissionCatalog.match("GET", "/api/v1/facturation/referentials/services").orElseThrow();
+    assertTrue(java.util.Arrays.asList(services.anyOfPermissions()).contains("FACTURATION_SERVICES_VIEW"));
+    for (String code : services.anyOfPermissions()) {
+      assertFalse(code.equals("MODULE_FACTURATION"));
+    }
+    var candidates = ApiPermissionCatalog.match(
+        "GET", "/api/v1/facturation/referentials/services/import/candidates").orElseThrow();
+    assertTrue(candidates.pathPrefix().endsWith("/import/candidates"));
+    assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/referentials/services").isPresent());
+    assertTrue(ApiPermissionCatalog.match("PUT", "/api/v1/facturation/referentials/services/4/actif").isPresent());
+    assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/referentials/stock").isEmpty());
+    assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/referentials/stock/import/selected").isPresent());
+    assertTrue(ApiPermissionCatalog.match("PUT", "/api/v1/facturation/referentials/prestations/9/actif").isPresent());
+    assertTrue(ApiPermissionCatalog.match("POST", "/api/v1/facturation/referentials/medicaments").isEmpty());
+    var stockPut = ApiPermissionCatalog.match("PUT", "/api/v1/facturation/referentials/stock/3").orElseThrow();
+    assertTrue(java.util.Arrays.asList(stockPut.anyOfPermissions()).contains("FACTURATION_STOCK_STATUS_UPDATE"));
+    assertFalse(java.util.Arrays.asList(stockPut.anyOfPermissions()).contains("FACTURATION_STOCK_CREATE"));
+  }
 }

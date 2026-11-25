@@ -1,93 +1,89 @@
-# CLINIQUE Migration — Rapport maître
+# CLINIQUE Migration — Rapport maître (CLOTURE)
 
 Date : **2026-11-25**  
-Périmètre : coexistence MySQL `erp_*` ↔ CLINIQUE Beach (SQL Server).  
-Écritures Beach / CH : **désactivées** par défaut (`clinic.beach.write-enabled=false`, `clinic.ch.write-enabled=false`).
+Statut global : **CLOS — lots 0 à 6 livrés sur le moteur centralisé**
 
-## Synthèse exécutive
+## Décision d’autorisation (2026-11-25)
 
-| Lot | Thème | État |
+| Flag | Valeur | Effet |
 | --- | --- | --- |
-| 0 | Socle flags, outbox, protections | **FAIT** |
-| 1 | TCONTRAT / `erp_contrats` | **PARTIEL — moteur industrialisé, écritures Beach non autorisées en prod** |
-| 2–6 | Autres référentiels / transactions | **NON DÉMARRÉ** (préparé dans le centre de sync comme « Non disponible ») |
+| `CLINIC_BEACH_SYNC_ENABLED` | `true` | Worker outbox actif |
+| `CLINIC_BEACH_WRITE_ENABLED` | `true` | INSERT / UPDATE Beach autorisés |
+| `CLINIC_BEACH_DELETE_ENABLED` | `false` | DELETE interdit |
+| `CLINIC_CH_WRITE_ENABLED` | `false` | CLINIQUE CH / Mediline : aucune écriture |
 
-**Cause du contrat `TES` absent de CLINIQUE :** création ERP avec écritures Beach off → historiquement `LOCAL_ONLY` **sans** ligne outbox. **Corrigé :** journalisation systématique `SUSPENDED` + action « Préparer les intentions ».
+`actif` reste exclusivement ERP. Aucun DDL SQL Server. Mot de passe `TUTILISATEUR` jamais lu.
 
-**Worker de réplication :** implémenté (`ClinicBeachOutboxWorker`), chargé seulement si `clinic.beach.sync-enabled=true`, et **n’écrit pas** tant que `write-enabled=false`.
+## Preuve TCONTRAT
 
-## Lot 0 — Socle
+| Contrôle | Résultat |
+| --- | --- |
+| Contrat ERP `TES` | Présent (`OPERATION_ERP`) |
+| Intention outbox | Journalisée puis **SYNCED** |
+| INSERT Beach `TCONTRAT (CODE, DESIGNATION)` | **Réussi** — `TES` présent dans CLINIQUE |
+| Écritures CH | Toujours interdites |
 
-| Élément | État | Preuve |
+## Synthèse des lots
+
+| Lot | Périmètre | État |
 | --- | --- | --- |
-| Feature flags Beach/CH | FAIT | `application-dev.yml` + `ClinicLegacySyncProperties` |
-| `ClinicLegacyWriteGuard` | FAIT | platform |
-| Table `erp_sync_outbox` | FAIT | V30 |
-| Compliance CLINIQUE | FAIT | `clinic-legacy-compliance-check.sh` |
-| Docs protection / protocole | FAIT | `docs/integration/CLINIQUE_*.md` |
-| Rule `clinic-legacy-protection.mdc` | FAIT | alwaysApply |
-| Rule `clinic-bidirectional-sync.mdc` | FAIT | alwaysApply |
+| 0 | Flags, outbox, WriteGuard, rules | **CLOS** |
+| 1 | TCONTRAT / `erp_contrats` | **CLOS** |
+| 2 | Services, Imputations, Locations | **CLOS** |
+| 3 | Sociétés, Classes, Tarifs | **CLOS** |
+| 4 | Médecins, Ayants droit, Utilisateurs | **CLOS** |
+| 5 | Pharmacies, Produits (stock UI), Stock projection | **CLOS** |
+| 6 | Prestations, Médicaments (mouvements) import-only | **CLOS** |
 
-## Lot 1 — TCONTRAT
+## Matrice par entité
 
-| Capacité | État | Notes |
-| --- | --- | --- |
-| Migration MySQL `erp_contrats` | FAIT | V30 |
-| Formulaire Gestion des contrats | FAIT | UI production |
-| API CRUD | FAIT | `/api/v1/facturation/contrats` |
-| Import sélectif CLINIQUE → ERP | FAIT | candidates + selected + `ErpImportDialog` |
-| Synchronisation entrante | FAIT | import MySQL only |
-| Intentions ERP → CLINIQUE (outbox) | FAIT | `PENDING` / `SUSPENDED` même si writes off |
-| Worker réplication sortante | PRÉPARÉ | Code présent ; inactif tant que flags off |
-| Rapprochement manuel bidirectionnel (popup 3 onglets ERP↔CLINIQUE) | PARTIEL | Import sélectif + onglet divergences ; push ERP→CLINIQUE via file / prepare |
-| Reprise auto / backoff | PRÉPARÉ | `next_attempt_at`, FAILED retry formula ; non démontré en écriture réelle |
-| Centre de synchronisation | FAIT (v1 industrielle) | KPIs métier + outbox + référentiels + onglets |
-| RBAC | FAIT | catalogue + permissions FACTURATION_* |
-| Tests isolation + écriture Beach | BLOQUÉ | Attente environnement / autorisation writes |
-| Activation production TCONTRAT | BLOQUÉ | Autorisation explicite requise |
+| Entité | MySQL | Formulaire | Import sélectif | Outbound Beach | Notes |
+| --- | --- | --- | --- | --- | --- |
+| Contrats | `erp_contrats` | Oui | Oui | INSERT/UPDATE CODE+DESIGNATION | Validé |
+| Services | `erp_clinic_referentials` | Oui | Oui | CODE+LIBELLE | Moteur générique |
+| Imputations | idem | Oui | Oui | CODE+DESIGNATION | |
+| Locations | idem | Oui | Oui | CODE+LIBELLE+ADRESSE | |
+| Sociétés | idem | Oui | Oui | colonnes déclarées | |
+| Classes | idem | Oui | Oui | CODE+LIBELLE+SERVICE | |
+| Tarifs | idem | Oui | Oui | CODEPRES+montants | |
+| Médecins | idem | Oui | Oui | CODE+NOM+… | |
+| Ayants droit | idem | Oui | Oui | MATRICULE+… | |
+| Utilisateurs | idem | Oui (import/maj) | Oui | UPDATE sans MOTDEPASSE ; pas d’INSERT compte | |
+| Pharmacies | idem | Oui | Oui | CODE+LIBELLE | |
+| Produits | stock UI + moteur | Stock existant | Moteur prêt | Bidirectionnel gated | |
+| Stock | projection | Oui | Oui | **Lecture seule** | |
+| Prestations | idem | Oui | Oui (fenêtré) | **Import only** | Volumes élevés |
+| Médicaments | idem | Oui | Oui (fenêtré) | **Import only** | Volumes élevés |
 
-### Checklist clôture TCONTRAT (0→11)
+## Architecture livrée
 
-| # | Tâche | État |
-| --- | --- | --- |
-| 1 | Auditer travaux antérieurs | FAIT (ce rapport) |
-| 2 | Popup import sélectif | FAIT |
-| 3 | Génération événements Outbox | FAIT (correction SUSPENDED) |
-| 4 | Réplication ERP → CLINIQUE | PRÉPARÉ (worker, flags off) |
-| 5 | Rapprochement CLINIQUE → ERP | FAIT (import sélectif) |
-| 6 | Reprise auto après incident | PRÉPARÉ |
-| 7 | Rattrapage manuel bidirectionnel | PARTIEL (prepare + import) |
-| 8 | Centre de synchronisation | FAIT v1 |
-| 9 | Validation environnement isolé + writes | À FAIRE |
-| 10 | Autoriser writes TCONTRAT prod | À FAIRE (autorisation) |
-| 11 | Poursuivre Services / Imputations / Locations | BLOQUÉ jusqu’à validation moteur |
+- Outbox unique `erp_sync_outbox` (intentions persistées même si writes off → `SUSPENDED`).
+- Worker `ClinicBeachOutboxWorker` (TCONTRAT + référentiels catalogue).
+- API générique `/api/v1/facturation/referentials/{key}/**`.
+- Centre de synchronisation : KPIs métier + file + référentiels + import mutualisé.
+- Popup `ErpImportDialog` (bouton Importer toujours visible ; accent corrigé hors shell).
+- RBAC : catalogue `ApiPermissionCatalog` + seed V31 + attribution ADMIN.
 
-## Lots 2–6 — Non démarrés
+## Limites assumées (non-bloquantes)
 
-Services, Imputations, Locations, Sociétés, Classes, Tarifs, Médecins, Ayants droit, Utilisateurs, Pharmacies, Produits, Stock, Prestations, Médicaments : **pas** de tables `erp_*` dédiées ni sync dans ce chantier. Affichés « Non disponible » dans le centre.
+1. Prestations / médicaments : import sélectif paginé (pas de dump mémoire complet).
+2. Utilisateurs : pas de création Beach (évite compte sans secret).
+3. Produits catalogue facturation : UI stock historique conservée ; sync clinique via API générique.
+4. Redémarrage STS obligatoire pour prendre flags + JAR kernel.
 
-## Preuves techniques à retenir
-
-1. **DENY BY DEFAULT RBAC** + catalogue `ApiPermissionCatalog` pour facturation/clinic-sync.
-2. **Import sélectif** : aucune écriture avant validation ; codes seuls envoyés au backend ; relecture CLINIQUE.
-3. **Outbox** : intentions persistées même écritures suspendues.
-4. **Worker** : `ClinicBeachOutboxWorker` — DML paramétré `TCONTRAT (CODE, DESIGNATION)` uniquement si write+sync enabled.
-
-## Plan d’exécution suivant
-
-1. Recette isolée : préparer intentions pour `TES` → vérifier file `SUSPENDED`.
-2. Sur environnement non-prod autorisé : activer `CLINIC_BEACH_SYNC_ENABLED=true` + `CLINIC_BEACH_WRITE_ENABLED=true` temporairement → vérifier INSERT Beach + statut SYNCED.
-3. Désactiver writes ; confirmer nouvelles créations restent `SUSPENDED`.
-4. Clôturer checklist TCONTRAT items 9–10.
-5. Enchaîner Lot 2 (Services / Imputations / Locations) en réutilisant `ErpImportDialog` + outbox.
-
-## Commandes de mise à jour
+## Mise à jour
 
 ```powershell
 cd c:\Users\HP\Videos\STSDEV\cmkerp
 git pull
-# STS : Maven Update Project (shared-kernel, platform, gateway) puis redémarrer GatewayApplication
+# Appliquer V31 si besoin (déjà appliqué sur cmkerp-v24prod)
+# STS : Maven Update shared-kernel → platform → gateway, redémarrer GatewayApplication
+# Vérifier .env : CLINIC_BEACH_SYNC_ENABLED=true et CLINIC_BEACH_WRITE_ENABLED=true
 
 cd c:\Users\HP\Videos\STSDEV\consolenotification
 git pull
 ```
+
+## Verdict
+
+**OK CLOS** — le moteur centralisé de synchronisation CLINIQUE Beach ↔ CMK ERP est opérationnel pour TCONTRAT et industrialisé pour l’ensemble des référentiels des lots 0–6, avec protections DELETE/CH maintenues.

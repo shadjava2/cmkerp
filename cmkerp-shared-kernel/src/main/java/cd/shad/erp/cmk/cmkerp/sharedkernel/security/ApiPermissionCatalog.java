@@ -161,6 +161,46 @@ public final class ApiPermissionCatalog {
         "FACTURATION_SYNC_RETRY", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/clinic-sync",
         "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_CONFLICT_RESOLVE", "FACTURATION_SYNC_IMPORT");
+    registerClinicReferentials();
+  }
+
+  /**
+   * Un préfixe par référentiel : la permission d'action est exigée, jamais MODULE_FACTURATION.
+   * Les chemins les plus longs (import) l'emportent sur la collection.
+   */
+  private static void registerClinicReferentials() {
+    referential("services", "FACTURATION_SERVICES", "SIDEBAR_FACTURATION_SERVICES", true);
+    referential("imputations", "FACTURATION_IMPUTATIONS", "SIDEBAR_FACTURATION_IMPUTATIONS", true);
+    referential("locations", "FACTURATION_LOCATIONS", "SIDEBAR_FACTURATION_LOCATIONS", true);
+    referential("societes", "FACTURATION_SOCIETES", "SIDEBAR_FACTURATION_SOCIETES", true);
+    referential("classes", "FACTURATION_CLASSES", "SIDEBAR_FACTURATION_CLASSES", true);
+    referential("tarifs", "FACTURATION_TARIFS", "SIDEBAR_FACTURATION_TARIFS", true);
+    referential("medecins", "FACTURATION_MEDECINS", "SIDEBAR_FACTURATION_MEDECINS", true);
+    referential("ayants-droit", "FACTURATION_AYANTSDROIT", "SIDEBAR_FACTURATION_AYANTSDROIT", true);
+    referential("utilisateurs", "FACTURATION_UTILISATEURS", "SIDEBAR_FACTURATION_UTILISATEURS", true);
+    referential("pharmacies", "FACTURATION_PHARMACIES", "SIDEBAR_FACTURATION_PHARMACIES", true);
+    referential("produits", "FACTURATION_PRODUITS", "SIDEBAR_FACTURATION_PRODUITS", true);
+    referential("stock", "FACTURATION_STOCK", "SIDEBAR_FACTURATION_STOCK", false);
+    referential("prestations", "FACTURATION_PRESTATIONS", "SIDEBAR_FACTURATION_PRESTATIONS", false);
+    referential("medicaments", "FACTURATION_MEDICAMENTS", "SIDEBAR_FACTURATION_MEDICAMENTS", false);
+  }
+
+  private static void referential(String key, String prefix, String sidebar, boolean mutable) {
+    String base = "/api/v1/facturation/referentials/" + key;
+    String view = prefix + "_VIEW";
+    String importPerm = prefix + "_IMPORT";
+    String status = prefix + "_STATUS_UPDATE";
+    rule("GET", base + "/import/candidates", importPerm, "FACTURATION_SYNC_DRY_RUN", "FACTURATION_SYNC_IMPORT");
+    rule("GET", base, view, sidebar);
+    rule("POST", base + "/import/selected", importPerm, "FACTURATION_SYNC_IMPORT");
+    rule("POST", base + "/import/dry-run", importPerm, "FACTURATION_SYNC_DRY_RUN");
+    rule("POST", base + "/import", importPerm, "FACTURATION_SYNC_IMPORT");
+    if (mutable) {
+      rule("POST", base, prefix + "_CREATE");
+      rule("PUT", base, prefix + "_UPDATE", status);
+    } else {
+      rule("PUT", base, status);
+    }
   }
 
   private ApiPermissionCatalog() {

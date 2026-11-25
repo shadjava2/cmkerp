@@ -1,5 +1,6 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -12,34 +13,45 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import cd.shad.erp.cmk.cmkerp.gateway.facturation.ClinicReferentialCatalog.Definition;
 import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteGuard;
 
 /**
- * Worker de réplication ERP → CLINIQUE Beach (TCONTRAT CODE/DESIGNATION uniquement).
+ * Worker de réplication ERP → CLINIQUE Beach.
  *
- * <p>Inactif tant que {@code clinic.beach.sync-enabled=false} ou écritures désactivées.
- * Les intentions SUSPENDED sont promues en PENDING uniquement lorsque les écritures sont autorisées.
+ * <p>TCONTRAT et les référentiels bidirectionnels du catalogue. Inactif tant que
+ * {@code clinic.beach.sync-enabled=false}. Les écritures restent gated par
+ * {@code clinic.beach.write-enabled}. DELETE et CLINIQUE CH restent interdits.
  */
 @Component
 @ConditionalOnProperty(prefix = "clinic.beach", name = "sync-enabled", havingValue = "true")
 public class ClinicBeachOutboxWorker {
 
   private static final Logger log = LoggerFactory.getLogger(ClinicBeachOutboxWorker.class);
+  private static final TypeReference<LinkedHashMap<String, Object>> MAP_TYPE = new TypeReference<>() {
+  };
 
   private final ErpContratRepository repository;
+  private final ClinicReferentialRepository referentialRepository;
+  private final ClinicReferentialLegacyWriter referentialWriter;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
   private final JdbcTemplate cliniqueJdbc;
 
   public ClinicBeachOutboxWorker(
       ErpContratRepository repository,
+      ClinicReferentialRepository referentialRepository,
+      ClinicReferentialLegacyWriter referentialWriter,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
       @Autowired(required = false) @Qualifier("cliniqueJdbcTemplate") JdbcTemplate cliniqueJdbc) {
     this.repository = repository;
+    this.referentialRepository = referentialRepository;
+    this.referentialWriter = referentialWriter;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
     this.cliniqueJdbc = cliniqueJdbc;
@@ -68,10 +80,18 @@ public class ClinicBeachOutboxWorker {
       long id = ((Number) row.get("id")).longValue();
       try {
         apply(row);
-        repository.markOutboxSynced(id);
+        String entity = String.valueOf(row.get("entityType"));
         Object entityId = row.get("entityId");
-        if (entityId instanceof Number n) {
-          repository.markContratSynced(n.longValue(), String.valueOf(row.get("legacyKey")));
+        if ("TCONTRAT".equalsIgnoreCase(entity)) {
+          repository.markOutboxSynced(id);
+          if (entityId instanceof Number n) {
+            repository.markContratSynced(n.longValue(), String.valueOf(row.get("legacyKey")));
+          }
+        } else {
+          if (entityId instanceof Number n) {
+            referentialRepository.markSynced(n.longValue(), String.valueOf(row.get("legacyKey")));
+          }
+          repository.markOutboxSynced(id);
         }
       } catch (Exception ex) {
         log.warn("Worker Beach échec op={} : {}", row.get("operationId"), ex.getMessage());
@@ -81,6 +101,11 @@ public class ClinicBeachOutboxWorker {
   }
 
   private void apply(Map<String, Object> row) throws Exception {
+    String entity = String.valueOf(row.get("entityType"));
+    if (!"TCONTRAT".equalsIgnoreCase(entity)) {
+      applyReferential(row, entity);
+      return;
+    }
     writeGuard.assertBeachWriteAllowed("TCONTRAT." + row.get("operationType"));
     JsonNode payload = objectMapper.readTree(String.valueOf(row.get("payloadJson")));
     String code = payload.path("code").asText(null);
@@ -121,5 +146,25 @@ public class ClinicBeachOutboxWorker {
       return;
     }
     throw new IllegalStateException("Opération non supportée: " + op);
+  }
+
+  private void applyReferential(Map<String, Object> row, String entity) throws Exception {
+    Definition def = ClinicReferentialCatalog.byEntity(entity)
+        .orElseThrow(() -> new IllegalStateException("Référentiel non pris en charge"));
+    JsonNode payload = objectMapper.readTree(String.valueOf(row.get("payloadJson")));
+    String key = payload.path("key").asText(null);
+    if (key == null || key.isBlank()) {
+      throw new IllegalStateException("Payload sans identifiant");
+    }
+    Map<String, Object> fields = new LinkedHashMap<>();
+    JsonNode fieldsNode = payload.path("fields");
+    if (fieldsNode.isObject()) {
+      fields.putAll(objectMapper.convertValue(fieldsNode, MAP_TYPE));
+    }
+    fields.remove("MOTDEPASSE");
+    fields.remove("motdepasse");
+    fields.remove("ACTIF");
+    fields.remove("actif");
+    referentialWriter.apply(def, String.valueOf(row.get("operationType")), key, fields);
   }
 }

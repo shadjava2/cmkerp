@@ -360,6 +360,41 @@ public class RbacSchemaInitializer implements ApplicationRunner {
         upsertPermission(row[0], row[1], syncId);
       }
     }
+    seedClinicReferentialPermissions();
+  }
+
+  private void seedClinicReferentialPermissions() {
+    String[][] refs = {
+        { "SIDEBAR_FACTURATION_SERVICES", "FACTURATION_SERVICES", "les services", "1" },
+        { "SIDEBAR_FACTURATION_IMPUTATIONS", "FACTURATION_IMPUTATIONS", "les imputations", "1" },
+        { "SIDEBAR_FACTURATION_LOCATIONS", "FACTURATION_LOCATIONS", "les locations", "1" },
+        { "SIDEBAR_FACTURATION_SOCIETES", "FACTURATION_SOCIETES", "les sociétés", "1" },
+        { "SIDEBAR_FACTURATION_CLASSES", "FACTURATION_CLASSES", "les classes", "1" },
+        { "SIDEBAR_FACTURATION_TARIFS", "FACTURATION_TARIFS", "les tarifs", "1" },
+        { "SIDEBAR_FACTURATION_MEDECINS", "FACTURATION_MEDECINS", "les médecins", "1" },
+        { "SIDEBAR_FACTURATION_AYANTSDROIT", "FACTURATION_AYANTSDROIT", "les ayants droit", "1" },
+        { "SIDEBAR_FACTURATION_UTILISATEURS", "FACTURATION_UTILISATEURS", "les utilisateurs", "1" },
+        { "SIDEBAR_FACTURATION_PHARMACIES", "FACTURATION_PHARMACIES", "les pharmacies", "1" },
+        { "SIDEBAR_FACTURATION_PRODUITS", "FACTURATION_PRODUITS", "les produits", "1" },
+        { "SIDEBAR_FACTURATION_STOCK", "FACTURATION_STOCK", "le stock", "0" },
+        { "SIDEBAR_FACTURATION_PRESTATIONS", "FACTURATION_PRESTATIONS", "les prestations", "0" },
+        { "SIDEBAR_FACTURATION_MEDICAMENTS", "FACTURATION_MEDICAMENTS", "les médicaments", "0" },
+    };
+    for (String[] ref : refs) {
+      Long parent = findPermissionId(ref[0]);
+      if (parent == null) {
+        continue;
+      }
+      String prefix = ref[1];
+      String label = ref[2];
+      upsertPermission(prefix + "_VIEW", "Consulter " + label, parent);
+      upsertPermission(prefix + "_IMPORT", "Importer " + label + " depuis CLINIQUE", parent);
+      upsertPermission(prefix + "_STATUS_UPDATE", "Activer ou désactiver " + label + " (ERP seulement)", parent);
+      if ("1".equals(ref[3])) {
+        upsertPermission(prefix + "_CREATE", "Créer " + label, parent);
+        upsertPermission(prefix + "_UPDATE", "Modifier " + label, parent);
+      }
+    }
   }
 
   private void upsertPermission(String nom, String description, Long parentId) {

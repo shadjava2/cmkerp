@@ -20,16 +20,19 @@ public class ErpContratService {
 
   private final ErpContratRepository repository;
   private final ClinicContratLegacyReader legacyReader;
+  private final ClinicReferentialService referentialService;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
 
   public ErpContratService(
       ErpContratRepository repository,
       ClinicContratLegacyReader legacyReader,
+      ClinicReferentialService referentialService,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.legacyReader = legacyReader;
+    this.referentialService = referentialService;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
   }
@@ -388,32 +391,7 @@ public class ErpContratService {
 
     java.util.ArrayList<Map<String, Object>> list = new java.util.ArrayList<>();
     list.add(contrats);
-    for (String[] ref : new String[][] {
-        {"SERVICES", "Services"},
-        {"IMPUTATIONS", "Imputations"},
-        {"LOCATIONS", "Locations"},
-        {"SOCIETES", "Sociétés"},
-        {"CLASSES", "Classes"},
-        {"TARIFS", "Tarifs"},
-        {"MEDECINS", "Médecins"},
-        {"AYANTS_DROIT", "Ayants droit"},
-        {"UTILISATEURS", "Utilisateurs"},
-        {"PHARMACIES", "Pharmacies"},
-        {"PRODUITS", "Produits"},
-        {"STOCK", "Stock"},
-        {"PRESTATIONS", "Prestations"},
-        {"MEDICAMENTS", "Médicaments"}
-    }) {
-      Map<String, Object> item = new HashMap<>();
-      item.put("code", ref[0]);
-      item.put("label", ref[1]);
-      item.put("integrated", false);
-      item.put("mode", "NOT_READY");
-      item.put("erpCount", null);
-      item.put("clinicCount", null);
-      item.put("state", "NON_IMPLEMENTE");
-      list.add(item);
-    }
+    list.addAll(referentialService.supervisionSummaries());
     return list;
   }
 
