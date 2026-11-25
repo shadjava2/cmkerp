@@ -3,9 +3,12 @@ package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,13 +19,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteGuard;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.AuthTokenExtractor;
 import cd.shad.erp.cmk.cmkerp.sharedkernel.security.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * APIs relationnelles Facturation : mappings, transactions ERP, dashboard.
- * Source de vérité = tables erp_*. Écritures Beach hors TCONTRAT non activées.
+ * Source de vérité = tables erp_*. Écritures Beach hors TCONTRAT non activées
+ * (intentions outbox SUSPENDED conservées pour prestations / médicaments).
  */
 @RestController
 @RequestMapping("/api/v1/facturation")
@@ -30,11 +38,18 @@ public class FacturationRelationalController {
 
   private final ErpFacturationRelationalStore store;
   private final JwtTokenProvider jwtTokenProvider;
+  private final ClinicLegacyWriteGuard writeGuard;
+  private final ObjectMapper objectMapper;
 
   public FacturationRelationalController(
-      ErpFacturationRelationalStore store, JwtTokenProvider jwtTokenProvider) {
+      ErpFacturationRelationalStore store,
+      JwtTokenProvider jwtTokenProvider,
+      ClinicLegacyWriteGuard writeGuard,
+      ObjectMapper objectMapper) {
     this.store = store;
     this.jwtTokenProvider = jwtTokenProvider;
+    this.writeGuard = writeGuard;
+    this.objectMapper = objectMapper;
   }
 
   @GetMapping("/dashboard/snapshot")
@@ -135,17 +150,20 @@ public class FacturationRelationalController {
       @RequestParam(defaultValue = "50") int size) {
     int safeSize = Math.min(Math.max(size, 1), 200);
     int safePage = Math.max(page, 0);
+    boolean beachOn = writeGuard.beachEntityWriteEnabled("TPRESTATION");
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("items", store.listPrestations(q, safeSize, safePage * safeSize));
     result.put("total", store.countPrestations(q));
     result.put("page", safePage);
     result.put("size", safeSize);
-    result.put("beachWriteEnabled", false);
-    result.put("mode", "ERP_LOCAL_ONLY");
+    result.put("beachWriteEnabled", beachOn);
+    result.put("mode", beachOn ? "BEACH_PENDING" : "BEACH_SUSPENDED");
+    result.put("writeEntities", writeGuard.properties().getBeach().getWriteEntities());
     return ResponseEntity.ok(result);
   }
 
   @PostMapping("/billing/prestations")
+  @Transactional
   public ResponseEntity<Map<String, Object>> createPrestation(
       @RequestBody Map<String, Object> body, HttpServletRequest request) {
     Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
@@ -155,14 +173,32 @@ public class FacturationRelationalController {
     if (body.get("tarifId") == null && body.get("montant") == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tarif ou montant obligatoire.");
     }
-    long id = store.insertPrestation(body, userId);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("id", id);
-    result.put("syncStatus", "LOCAL_ONLY");
-    result.put("beachReplication", "DISABLED");
-    result.put("legacySignature", store.findLegacyUserCodeForErpUser(userId).orElse(null));
-    result.put("legacySignatureReady", store.findLegacyUserCodeForErpUser(userId).isPresent());
-    result.put("message", "Prestation enregistrée dans CMK ERP. Réplication CLINIQUE non autorisée.");
+    writeGuard.assertChWriteForbidden();
+    Optional<String> legacyUser = store.findLegacyUserCodeForErpUser(userId);
+    String syncStatus = resolveBillingSyncStatus("TPRESTATION", legacyUser.isPresent(), body);
+    Map<String, Object> created = store.insertPrestation(body, userId, syncStatus);
+    long id = ((Number) created.get("id")).longValue();
+    enqueueBillingIntention(
+        "TPRESTATION",
+        id,
+        String.valueOf(created.get("operationId")),
+        "INSERT",
+        body,
+        userId,
+        legacyUser.orElse(null),
+        syncStatus,
+        List.of(
+            "IDMVT", "SERIE", "K", "AFACT", "CODECMK", "NDATE", "SOURCE",
+            "UTILISATEUR", "CODEPRES", "LIBPRES", "MONTANT"));
+    Map<String, Object> result = new LinkedHashMap<>(created);
+    result.put("beachReplication", writeGuard.beachEntityWriteEnabled("TPRESTATION") ? "PENDING" : "SUSPENDED");
+    result.put("legacySignature", legacyUser.orElse(null));
+    result.put("legacySignatureReady", legacyUser.isPresent());
+    result.put(
+        "message",
+        "Prestation enregistrée dans CMK ERP. Intention CLINIQUE journalisée ("
+            + syncStatus
+            + "). Écriture Beach non autorisée hors liste blanche.");
     return ResponseEntity.ok(result);
   }
 
@@ -173,17 +209,20 @@ public class FacturationRelationalController {
       @RequestParam(defaultValue = "50") int size) {
     int safeSize = Math.min(Math.max(size, 1), 200);
     int safePage = Math.max(page, 0);
+    boolean beachOn = writeGuard.beachEntityWriteEnabled("TMEDICAMENT");
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("items", store.listMedicamentsTx(q, safeSize, safePage * safeSize));
     result.put("total", store.countMedicamentsTx(q));
     result.put("page", safePage);
     result.put("size", safeSize);
-    result.put("beachWriteEnabled", false);
-    result.put("mode", "ERP_LOCAL_ONLY");
+    result.put("beachWriteEnabled", beachOn);
+    result.put("mode", beachOn ? "BEACH_PENDING" : "BEACH_SUSPENDED");
+    result.put("writeEntities", writeGuard.properties().getBeach().getWriteEntities());
     return ResponseEntity.ok(result);
   }
 
   @PostMapping("/billing/medicaments")
+  @Transactional
   public ResponseEntity<Map<String, Object>> createMedicament(
       @RequestBody Map<String, Object> body, HttpServletRequest request) {
     Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
@@ -193,16 +232,100 @@ public class FacturationRelationalController {
     if (body.get("productId") == null && body.get("productCode") == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Produit obligatoire.");
     }
-    long id = store.insertMedicament(body, userId);
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("id", id);
-    result.put("syncStatus", "LOCAL_ONLY");
-    result.put("beachReplication", "DISABLED");
+    writeGuard.assertChWriteForbidden();
+    Optional<String> legacyUser = store.findLegacyUserCodeForErpUser(userId);
+    String syncStatus = resolveBillingSyncStatus("TMEDICAMENT", legacyUser.isPresent(), body);
+    Map<String, Object> created = store.insertMedicament(body, userId, syncStatus);
+    long id = ((Number) created.get("id")).longValue();
+    enqueueBillingIntention(
+        "TMEDICAMENT",
+        id,
+        String.valueOf(created.get("operationId")),
+        "INSERT",
+        body,
+        userId,
+        legacyUser.orElse(null),
+        syncStatus,
+        List.of(
+            "IDM", "QTE", "PAU", "MONTANT", "UNITGEST", "AFACT",
+            "UTILISATEUR", "CODEPROD", "CODEPHARM"));
+    Map<String, Object> result = new LinkedHashMap<>(created);
+    result.put("beachReplication", writeGuard.beachEntityWriteEnabled("TMEDICAMENT") ? "PENDING" : "SUSPENDED");
     result.put("stockMovement", "NONE");
-    result.put("legacySignature", store.findLegacyUserCodeForErpUser(userId).orElse(null));
-    result.put("legacySignatureReady", store.findLegacyUserCodeForErpUser(userId).isPresent());
-    result.put("message",
-        "Médicament enregistré dans CMK ERP. Aucune sortie de stock ni réplication CLINIQUE.");
+    result.put("legacySignature", legacyUser.orElse(null));
+    result.put("legacySignatureReady", legacyUser.isPresent());
+    result.put(
+        "message",
+        "Médicament enregistré dans CMK ERP. Intention CLINIQUE journalisée ("
+            + syncStatus
+            + "). Aucune sortie de stock Beach tant que les règles et la liste blanche ne sont pas validées.");
     return ResponseEntity.ok(result);
+  }
+
+  /**
+   * Statut métier : PENDING seulement si l'entité est whitelistée ;
+   * BLOCKED_MAPPING si signature utilisateur absente ;
+   * BLOCKED_RULES si identifiants historiques non résolus (IDMVT/IDM) ;
+   * sinon SUSPENDED (écriture temporairement interdite — intention conservée).
+   */
+  private String resolveBillingSyncStatus(String entityType, boolean legacySignatureReady, Map<String, Object> body) {
+    if (!legacySignatureReady) {
+      return "BLOCKED_MAPPING";
+    }
+    boolean historicalIdsReady = body.get("legacyIdmvt") != null || body.get("legacyIdm") != null;
+    if (!historicalIdsReady) {
+      return "BLOCKED_RULES";
+    }
+    if (writeGuard.beachEntityWriteEnabled(entityType)) {
+      return "PENDING";
+    }
+    return "SUSPENDED";
+  }
+
+  private void enqueueBillingIntention(
+      String entityType,
+      long entityId,
+      String operationId,
+      String operationType,
+      Map<String, Object> body,
+      Long userId,
+      String legacyUser,
+      String syncStatus,
+      List<String> unresolvedColumns) {
+    if (store.hasOpenBillingOutbox(entityId, entityType)) {
+      return;
+    }
+    String outboxStatus =
+        "PENDING".equals(syncStatus) && writeGuard.beachEntityWriteEnabled(entityType)
+            ? "PENDING"
+            : "SUSPENDED";
+    try {
+      Map<String, Object> payload = new LinkedHashMap<>();
+      payload.put("operation", operationType);
+      payload.put("entityType", entityType);
+      payload.put("erpId", entityId);
+      payload.put("operationId", operationId);
+      payload.put("userId", userId == null ? 0 : userId);
+      payload.put("legacyUser", legacyUser);
+      payload.put("businessSyncStatus", syncStatus);
+      payload.put("unresolvedHistoricalRules", unresolvedColumns);
+      payload.put("body", body);
+      payload.put(
+          "note",
+          "Intention conservée. Adapter INSERT Beach non activé hors WRITE_ENTITIES=TCONTRAT. "
+              + "Ne pas exécuter tant que IDMVT/IDM, tarifs et signature ne sont pas résolus.");
+      store.enqueueBillingOutbox(
+          UUID.randomUUID().toString(),
+          entityType,
+          entityId,
+          operationId,
+          operationType,
+          objectMapper.writeValueAsString(payload),
+          UUID.randomUUID().toString(),
+          outboxStatus);
+    } catch (JsonProcessingException e) {
+      throw new ResponseStatusException(
+          HttpStatus.INTERNAL_SERVER_ERROR, "Journalisation synchronisation impossible");
+    }
   }
 }

@@ -1110,9 +1110,15 @@ public class ErpFacturationRelationalStore {
 
   // ---------- Transactions facturation ----------
 
-  public long insertPrestation(Map<String, Object> body, Long userId) {
+  /**
+   * Enregistre une prestation ERP destinée à CLINIQUE.
+   * {@code syncStatus} = PENDING si écriture Beach autorisée pour TPRESTATION, sinon SUSPENDED.
+   * Ne jamais utiliser LOCAL_ONLY pour une intention de réplication (leçon TES/contrats).
+   */
+  public Map<String, Object> insertPrestation(Map<String, Object> body, Long userId, String syncStatus) {
     KeyHolder keys = new GeneratedKeyHolder();
     String operationId = "PREST-" + UUID.randomUUID();
+    String status = normalizeClinicBoundStatus(syncStatus);
     jdbc.update(con -> {
       var ps = con.prepareStatement(
           """
@@ -1121,7 +1127,7 @@ public class ErpFacturationRelationalStore {
                  fk_tarif, legacy_tarif_code, fk_service, fk_classe, fk_imputation, fk_medecin,
                  legacy_medecin_code, fk_location, montant, date_prestation, payload_snapshot_json,
                  actif, source_system, sync_status, usercreateid, userupdateid)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'OPERATION_ERP', 'LOCAL_ONLY', ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'OPERATION_ERP', ?, ?, ?)
               """,
           new String[] {"id"});
       int i = 1;
@@ -1153,17 +1159,24 @@ public class ErpFacturationRelationalStore {
         ps.setTimestamp(i++, Timestamp.valueOf(text));
       }
       ps.setString(i++, str(body.get("snapshotJson")));
+      ps.setString(i++, status);
       setLong(ps, i++, userId);
       setLong(ps, i++, userId);
       return ps;
     }, keys);
     Number key = keys.getKey();
-    return key == null ? 0L : key.longValue();
+    long id = key == null ? 0L : key.longValue();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("id", id);
+    result.put("operationId", operationId);
+    result.put("syncStatus", status);
+    return result;
   }
 
-  public long insertMedicament(Map<String, Object> body, Long userId) {
+  public Map<String, Object> insertMedicament(Map<String, Object> body, Long userId, String syncStatus) {
     KeyHolder keys = new GeneratedKeyHolder();
     String operationId = "MED-" + UUID.randomUUID();
+    String status = normalizeClinicBoundStatus(syncStatus);
     jdbc.update(con -> {
       var ps = con.prepareStatement(
           """
@@ -1172,7 +1185,7 @@ public class ErpFacturationRelationalStore {
                  fk_product, legacy_product_code, fk_medecin, legacy_medecin_code, fk_pharmacy,
                  legacy_pharmacy_code, fk_service, fk_location, quantite, montant, date_mouvement,
                  payload_snapshot_json, actif, source_system, sync_status, usercreateid, userupdateid)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'OPERATION_ERP', 'LOCAL_ONLY', ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'OPERATION_ERP', ?, ?, ?)
               """,
           new String[] {"id"});
       int i = 1;
@@ -1205,12 +1218,76 @@ public class ErpFacturationRelationalStore {
         ps.setTimestamp(i++, Timestamp.valueOf(text));
       }
       ps.setString(i++, str(body.get("snapshotJson")));
+      ps.setString(i++, status);
       setLong(ps, i++, userId);
       setLong(ps, i++, userId);
       return ps;
     }, keys);
     Number key = keys.getKey();
-    return key == null ? 0L : key.longValue();
+    long id = key == null ? 0L : key.longValue();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("id", id);
+    result.put("operationId", operationId);
+    result.put("syncStatus", status);
+    return result;
+  }
+
+  /**
+   * Intention outbox pour une transaction facturation destinée à CLINIQUE Beach.
+   * Aucune écriture SQL Server ici. Le worker ne traite que les entités whitelistées.
+   */
+  public void enqueueBillingOutbox(
+      String operationId,
+      String entityType,
+      long entityId,
+      String legacyKey,
+      String operationType,
+      String payloadJson,
+      String correlationId,
+      String status) {
+    jdbc.update(
+        """
+            INSERT INTO erp_sync_outbox
+              (operation_id, entity_type, entity_id, legacy_key, source_system, target_system,
+               operation_type, payload_json, status, attempt_count, correlation_id)
+            VALUES (?, ?, ?, ?, 'ERP', 'CLINIQUE_BEACH', ?, ?, ?, 0, ?)
+            """,
+        operationId,
+        entityType,
+        entityId,
+        legacyKey,
+        operationType,
+        payloadJson,
+        normalizeClinicBoundStatus(status),
+        correlationId);
+  }
+
+  public boolean hasOpenBillingOutbox(long entityId, String entityType) {
+    Long n = jdbc.queryForObject(
+        """
+            SELECT COUNT(*) FROM erp_sync_outbox
+            WHERE entity_id = ? AND entity_type = ?
+              AND status IN ('PENDING', 'SUSPENDED', 'IN_PROGRESS', 'UNCERTAIN')
+            """,
+        Long.class,
+        entityId,
+        entityType);
+    return n != null && n > 0;
+  }
+
+  private static String normalizeClinicBoundStatus(String syncStatus) {
+    if (syncStatus == null || syncStatus.isBlank()) {
+      return "SUSPENDED";
+    }
+    String s = syncStatus.trim().toUpperCase(Locale.ROOT);
+    if ("LOCAL_ONLY".equals(s)) {
+      // Intention destinée à CLINIQUE : ne jamais perdre l'intention derrière LOCAL_ONLY.
+      return "SUSPENDED";
+    }
+    if ("PENDING".equals(s) || "SUSPENDED".equals(s) || "BLOCKED_RULES".equals(s) || "BLOCKED_MAPPING".equals(s)) {
+      return s;
+    }
+    return "SUSPENDED";
   }
 
   public List<Map<String, Object>> listPrestations(String q, int limit, int offset) {
