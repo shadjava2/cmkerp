@@ -16,7 +16,10 @@ import java.util.Optional;
 public final class ClinicReferentialCatalog {
 
   public static final int FULL_COMPARE_LIMIT = 40_000;
-  public static final int IMPORT_SELECTION_LIMIT = 200;
+  /** Taille max d'une sélection d'import (tarifs ~2k → lots successifs côté client). */
+  public static final int IMPORT_SELECTION_LIMIT = 500;
+  /** Page max pour la liste des candidats d'import. */
+  public static final int IMPORT_CANDIDATES_PAGE_MAX = 500;
 
   public enum Mode {
     /** Création / modification ERP journalisées vers Beach (INSERT/UPDATE). */

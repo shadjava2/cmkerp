@@ -189,7 +189,7 @@ public class ClinicReferentialService {
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
           "La source historique est temporairement indisponible.");
     }
-    int safeSize = Math.min(Math.max(size, 1), 100);
+    int safeSize = Math.min(Math.max(size, 1), ClinicReferentialCatalog.IMPORT_CANDIDATES_PAGE_MAX);
     int safePage = Math.max(page, 0);
     int sourceTotal = legacyReader.count(def, q);
     boolean complete = sourceTotal <= ClinicReferentialCatalog.FULL_COMPARE_LIMIT;
