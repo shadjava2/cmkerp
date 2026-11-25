@@ -39,6 +39,11 @@ Ce document remplace les synthèses antérieures. Sprint architectural **clôtur
 
 Imports historiques : **lecture SQL Server + écriture MySQL**, **aucun outbox**, **aucun recalcul de montants**.
 
+Deux canaux d’alimentation MySQL typée :
+
+1. API progressive `…/history/*/import` (lots par période)
+2. **ErpImportDialog** sélectif — `importSelected` miroite désormais `PRESTATIONS` / `MEDICAMENTS` / `STOCK` vers `erp_facturation_*` et `erp_stock_clinique` (auparavant ignorés par `supports()`)
+
 Poursuite possible par lots via API :
 
 - `POST /api/v1/facturation/history/prestations/import`
