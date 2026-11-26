@@ -99,6 +99,9 @@ public final class ApiPermissionCatalog {
         "DMI_CABINET_REGISTRE_CONSULTATIONS_VIEW");
     rule("POST", "/api/v1/cardex", "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER",
         "DMI_CARDEX_NOUVEAU_DOSSIER");
+    rule("POST", "/api/v1/dmi/registrations",
+        "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER",
+        "DMI_CARDEX_NOUVEAU_DOSSIER", "FACTURATION_AYANTSDROIT_CREATE");
     // Recherche d'identité patient (moteur unifié DMI / Facturation) — pas MODULE_DMI seul.
     rule("POST", "/api/v1/cardex/patients/recherche",
         "DMI_CARDEX_VIEW", "DMI_CARDEX_RECHERCHE", "DMI_ACCUEIL_RECHERCHE_PATIENT",
@@ -192,6 +195,13 @@ public final class ApiPermissionCatalog {
         "FACTURATION_PHARMACIES_VIEW", "SIDEBAR_FACTURATION_PHARMACIES");
     rule("PUT", "/api/v1/facturation/mappings/pharmacies",
         "FACTURATION_PHARMACIES_UPDATE", "FACTURATION_PHARMACIES_CREATE");
+    rule("GET", "/api/v1/facturation/mappings/societe-comptes",
+        "FACTURATION_SOCIETES_VIEW", "SIDEBAR_FACTURATION_SOCIETES");
+    rule("PUT", "/api/v1/facturation/mappings/societe-comptes",
+        "FACTURATION_SOCIETES_UPDATE", "SIDEBAR_FACTURATION_SOCIETES");
+    rule("GET", "/api/v1/facturation/lookups/mediline-comptes",
+        "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
+        "SIDEBAR_FACTURATION_SOCIETES");
     rule("GET", "/api/v1/facturation/products/search",
         "FACTURATION_PRODUITS_VIEW", "FACTURATION_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_PRODUITS",
         "SIDEBAR_FACTURATION_MEDICAMENTS");

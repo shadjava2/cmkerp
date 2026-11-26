@@ -29,13 +29,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class CardexCreationRequests implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(CardexCreationRequests.class);
 
-  enum Series {
+  public enum Series {
     PATIENT("t_personne", "PP", 5),
     FICHE("t_fiche_medicale", "FM-", 7);
 
-    final String table;
-    final String marker;
-    final int digits;
+    public final String table;
+    public final String marker;
+    public final int digits;
 
     Series(String table, String marker, int digits) {
       this.table = table;
@@ -69,7 +69,7 @@ public class CardexCreationRequests implements ApplicationRunner {
     }
   }
 
-  String reserve(Series series, UUID id, String actor, MapSqlParameterSource fields) {
+  public String reserve(Series series, UUID id, String actor, MapSqlParameterSource fields) {
     String fingerprint = fingerprint(fields);
     var params = params(series, id).addValue("actor", actor).addValue("hash", fingerprint);
     try {
@@ -99,7 +99,7 @@ public class CardexCreationRequests implements ApplicationRunner {
     }
   }
 
-  void recordCandidate(Series series, UUID id, String code) {
+  public void recordCandidate(Series series, UUID id, String code) {
     if (primary.update("""
         UPDATE cardex_creation_request SET candidate_code = :code
         WHERE series = :series AND request_id = :id AND confirmed_code IS NULL
@@ -108,7 +108,7 @@ public class CardexCreationRequests implements ApplicationRunner {
     }
   }
 
-  void confirm(Series series, UUID id, String code) {
+  public void confirm(Series series, UUID id, String code) {
     if (primary.update("""
         UPDATE cardex_creation_request SET confirmed_code = :code
         WHERE series = :series AND request_id = :id AND candidate_code = :code AND confirmed_code IS NULL
@@ -117,7 +117,7 @@ public class CardexCreationRequests implements ApplicationRunner {
     }
   }
 
-  void release(Series series, UUID id) {
+  public void release(Series series, UUID id) {
     primary.update("DELETE FROM cardex_creation_request WHERE series = :series AND request_id = :id AND confirmed_code IS NULL", params(series, id));
   }
 

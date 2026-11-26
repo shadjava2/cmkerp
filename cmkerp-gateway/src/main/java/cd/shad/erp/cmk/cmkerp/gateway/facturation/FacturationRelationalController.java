@@ -6,8 +6,11 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,18 +44,21 @@ public class FacturationRelationalController {
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
   private final FacturationDataConsolidationService consolidation;
+  private final JdbcTemplate medilineJdbc;
 
   public FacturationRelationalController(
       ErpFacturationRelationalStore store,
       JwtTokenProvider jwtTokenProvider,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
-      FacturationDataConsolidationService consolidation) {
+      FacturationDataConsolidationService consolidation,
+      @Autowired(required = false) @Qualifier("medilineJdbcTemplate") JdbcTemplate medilineJdbc) {
     this.store = store;
     this.jwtTokenProvider = jwtTokenProvider;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
     this.consolidation = consolidation;
+    this.medilineJdbc = medilineJdbc;
   }
 
   @GetMapping("/dashboard/snapshot")
@@ -233,6 +239,96 @@ public class FacturationRelationalController {
   public ResponseEntity<List<Map<String, Object>>> erpPharmacies(
       @RequestParam(required = false) String q) {
     return ResponseEntity.ok(store.listErpPharmacies(q, 100));
+  }
+
+  @GetMapping("/mappings/societe-comptes")
+  public ResponseEntity<Map<String, Object>> societeMedilineMappings(
+      @RequestParam(required = false) String q,
+      @RequestParam(required = false) String status,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    int safeSize = Math.min(Math.max(size, 1), 200);
+    int safePage = Math.max(page, 0);
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", store.listSocieteMedilineMappings(q, status, safeSize, safePage * safeSize));
+    result.put("total", store.countSocieteMedilineMappings(q, status));
+    result.put("page", safePage);
+    result.put("size", safeSize);
+    return ResponseEntity.ok(result);
+  }
+
+  @GetMapping("/mappings/societe-comptes/{societeId}")
+  public ResponseEntity<Map<String, Object>> societeMedilineMapping(@PathVariable long societeId) {
+    return ResponseEntity.ok(store.findSocieteMedilineMapping(societeId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.")));
+  }
+
+  @PutMapping("/mappings/societe-comptes/{societeId}")
+  public ResponseEntity<Map<String, Object>> bindSocieteMedilineCompte(
+      @PathVariable long societeId,
+      @RequestBody Map<String, Object> body,
+      HttpServletRequest request) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
+    String compteCode = body.get("medilineCompteCode") == null ? null : String.valueOf(body.get("medilineCompteCode"));
+    String compteIntitule = body.get("medilineCompteIntitule") == null
+        ? null
+        : String.valueOf(body.get("medilineCompteIntitule"));
+  if (body.get("clear") != null && Boolean.parseBoolean(String.valueOf(body.get("clear")))) {
+      int updated = store.clearSocieteMedilineCompte(societeId);
+      if (updated == 0) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.");
+      }
+      return ResponseEntity.ok(Map.of("societeId", societeId, "medilineMappingStatus", "UNMATCHED"));
+    }
+    if (compteCode == null || compteCode.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Compte Mediline obligatoire.");
+    }
+    int updated = store.bindSocieteMedilineCompte(societeId, compteCode, compteIntitule, userId);
+    if (updated == 0) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.");
+    }
+    return ResponseEntity.ok(store.findSocieteMedilineMapping(societeId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.")));
+  }
+
+  @GetMapping("/lookups/mediline-comptes")
+  public ResponseEntity<Map<String, Object>> medilineCompteLookup(
+      @RequestParam(required = false, defaultValue = "") String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    if (medilineJdbc == null) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Mediline indisponible.");
+    }
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    int safePage = Math.max(page, 0);
+    int offset = safePage * safeSize;
+    String like = q == null || q.isBlank() ? null : "%" + q.trim() + "%";
+    String countSql = """
+        SELECT COUNT(*) FROM t_compte WHERE CODE <> ''
+        """ + (like == null ? "" : " AND (CODE = ? OR INTITULE LIKE ?)");
+    long total = like == null
+        ? medilineJdbc.queryForObject(countSql, Long.class)
+        : medilineJdbc.queryForObject(countSql, Long.class, q.trim(), like);
+    String listSql = """
+        SELECT CODE, INTITULE, CATEGORIE_PATIENT, ETAT
+        FROM t_compte WHERE CODE <> ''
+        """
+        + (like == null ? "" : " AND (CODE = ? OR INTITULE LIKE ?)")
+        + " ORDER BY INTITULE, CODE LIMIT ? OFFSET ?";
+    List<Map<String, Object>> items = like == null
+        ? medilineJdbc.queryForList(listSql, safeSize + 1, offset)
+        : medilineJdbc.queryForList(listSql, q.trim(), like, safeSize + 1, offset);
+    boolean hasMore = items.size() > safeSize;
+    if (hasMore) {
+      items = items.subList(0, safeSize);
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", total);
+    result.put("page", safePage);
+    result.put("size", safeSize);
+    result.put("hasMore", hasMore);
+    return ResponseEntity.ok(result);
   }
 
   @GetMapping("/products/search")

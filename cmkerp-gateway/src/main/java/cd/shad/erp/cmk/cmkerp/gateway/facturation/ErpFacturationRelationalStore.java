@@ -463,7 +463,9 @@ public class ErpFacturationRelationalStore {
   public Optional<Map<String, Object>> findSocieteDetail(long id) {
     var list = jdbc.query(
         """
-            SELECT s.id, s.code, s.designation, s.fk_contrat, c.code AS contrat_code, c.designation AS contrat_designation
+            SELECT s.id, s.code, s.designation, s.fk_contrat, c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by
             FROM erp_societes s
             LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
             WHERE s.id = ?
@@ -476,6 +478,9 @@ public class ErpFacturationRelationalStore {
           m.put("contratId", rs.getObject("fk_contrat"));
           m.put("contratCode", rs.getString("contrat_code"));
           m.put("contratDesignation", rs.getString("contrat_designation"));
+          m.put("medilineCompteCode", rs.getString("mediline_compte_code"));
+          m.put("medilineCompteIntitule", rs.getString("mediline_compte_intitule"));
+          m.put("medilineMappingStatus", rs.getString("mediline_mapping_status"));
           return m;
         },
         id);
@@ -846,6 +851,8 @@ public class ErpFacturationRelationalStore {
         """
             SELECT s.id, s.code, s.designation, s.adresse, s.n_impot, s.nrc, s.id_nat,
                    s.fk_contrat, s.legacy_contrat_code, c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by,
                    s.actif, s.source_system, s.legacy_code, s.sync_status, s.version, s.last_synced_at
             FROM erp_societes s
             LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
@@ -875,6 +882,8 @@ public class ErpFacturationRelationalStore {
         """
             SELECT s.id, s.code, s.designation, s.adresse, s.n_impot, s.nrc, s.id_nat,
                    s.fk_contrat, s.legacy_contrat_code, c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by,
                    s.actif, s.source_system, s.legacy_code, s.sync_status, s.version, s.last_synced_at
             FROM erp_societes s
             LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
@@ -1021,6 +1030,9 @@ public class ErpFacturationRelationalStore {
       row.put("contratId", item.get("contratId"));
       row.put("contratCode", item.get("contratCode"));
       row.put("contratDesignation", item.get("contratDesignation"));
+      row.put("medilineCompteCode", item.get("medilineCompteCode"));
+      row.put("medilineCompteIntitule", item.get("medilineCompteIntitule"));
+      row.put("medilineMappingStatus", item.get("medilineMappingStatus"));
       @SuppressWarnings("unchecked")
       Map<String, Object> fields = item.get("fields") instanceof Map<?, ?> m
           ? (Map<String, Object>) m
@@ -1300,6 +1312,12 @@ public class ErpFacturationRelationalStore {
     item.put("contratId", rs.getObject("fk_contrat"));
     item.put("contratCode", rs.getString("contrat_code"));
     item.put("contratDesignation", rs.getString("contrat_designation"));
+    item.put("medilineCompteCode", rs.getString("mediline_compte_code"));
+    item.put("medilineCompteIntitule", rs.getString("mediline_compte_intitule"));
+    item.put("medilineMappingStatus", rs.getString("mediline_mapping_status"));
+    fields.put("medilineCompteCode", rs.getString("mediline_compte_code"));
+    fields.put("medilineCompteIntitule", rs.getString("mediline_compte_intitule"));
+    fields.put("medilineMappingStatus", rs.getString("mediline_mapping_status"));
     return item;
   }
 
@@ -2521,5 +2539,217 @@ public class ErpFacturationRelationalStore {
     } catch (NumberFormatException ex) {
       return BigDecimal.ZERO;
     }
+  }
+
+  // ---------- Correspondances société ↔ compte Mediline ----------
+
+  public List<Map<String, Object>> listSocieteMedilineMappings(String q, String status, int limit, int offset) {
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT s.id, s.code, s.designation, s.fk_contrat,
+                   c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by, s.actif
+            FROM erp_societes s
+            LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
+            WHERE 1=1
+            """);
+    var args = new ArrayList<Object>();
+    appendTextFilter(sql, args, q, "s.code", "s.designation", "s.mediline_compte_code", "s.mediline_compte_intitule");
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND s.mediline_mapping_status = ?");
+      args.add(status.trim().toUpperCase(Locale.ROOT));
+    }
+    sql.append(" ORDER BY s.code ASC LIMIT ? OFFSET ?");
+    args.add(clampLimit(limit));
+    args.add(Math.max(offset, 0));
+    return jdbc.query(sql.toString(), (rs, i) -> mapSocieteMedilineMappingRow(rs), args.toArray());
+  }
+
+  public long countSocieteMedilineMappings(String q, String status) {
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT COUNT(*) FROM erp_societes s
+            LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
+            WHERE 1=1
+            """);
+    var args = new ArrayList<Object>();
+    appendTextFilter(sql, args, q, "s.code", "s.designation", "s.mediline_compte_code", "s.mediline_compte_intitule");
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND s.mediline_mapping_status = ?");
+      args.add(status.trim().toUpperCase(Locale.ROOT));
+    }
+    Long n = jdbc.queryForObject(sql.toString(), Long.class, args.toArray());
+    return n == null ? 0 : n;
+  }
+
+  public Optional<Map<String, Object>> findSocieteMedilineMapping(long societeId) {
+    var list = jdbc.query(
+        """
+            SELECT s.id, s.code, s.designation, s.fk_contrat,
+                   c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by, s.actif
+            FROM erp_societes s
+            LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
+            WHERE s.id = ?
+            """,
+        (rs, i) -> mapSocieteMedilineMappingRow(rs),
+        societeId);
+    return list.stream().findFirst();
+  }
+
+  public int bindSocieteMedilineCompte(long societeId, String compteCode, String compteIntitule, Long verifiedBy) {
+    String code = trim(compteCode);
+    if (code == null || code.isBlank()) {
+      return 0;
+    }
+    return jdbc.update(
+        """
+            UPDATE erp_societes
+            SET mediline_compte_code = ?, mediline_compte_intitule = ?,
+                mediline_mapping_status = 'MATCHED',
+                mediline_mapping_verified_at = NOW(),
+                mediline_mapping_verified_by = ?, dateupdate = NOW()
+            WHERE id = ?
+            """,
+        code, trim(compteIntitule), verifiedBy, societeId);
+  }
+
+  public int clearSocieteMedilineCompte(long societeId) {
+    return jdbc.update(
+        """
+            UPDATE erp_societes
+            SET mediline_compte_code = NULL, mediline_compte_intitule = NULL,
+                mediline_mapping_status = 'UNMATCHED',
+                mediline_mapping_verified_at = NULL, mediline_mapping_verified_by = NULL,
+                dateupdate = NOW()
+            WHERE id = ?
+            """,
+        societeId);
+  }
+
+  private static Map<String, Object> mapSocieteMedilineMappingRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("societeId", rs.getLong("id"));
+    row.put("societeCode", rs.getString("code"));
+    row.put("societeDesignation", rs.getString("designation"));
+    row.put("contratId", rs.getObject("fk_contrat"));
+    row.put("contratCode", rs.getString("contrat_code"));
+    row.put("contratDesignation", rs.getString("contrat_designation"));
+    row.put("medilineCompteCode", rs.getString("mediline_compte_code"));
+    row.put("medilineCompteIntitule", rs.getString("mediline_compte_intitule"));
+    row.put("medilineMappingStatus", rs.getString("mediline_mapping_status"));
+    Timestamp verifiedAt = rs.getTimestamp("mediline_mapping_verified_at");
+    row.put("medilineMappingVerifiedAt", verifiedAt == null ? null : verifiedAt.toLocalDateTime());
+    row.put("medilineMappingVerifiedBy", rs.getObject("mediline_mapping_verified_by"));
+    row.put("actif", rs.getBoolean("actif"));
+    return row;
+  }
+
+  // ---------- Registre enregistrement patient DMI + ayant ----------
+
+  public Map<String, Object> findPatientRegistrationByRequestId(String requestId) {
+    var list = jdbc.query(
+        """
+            SELECT id, request_id, mediline_ipp, mediline_status, ayant_id, ayant_status,
+                   societe_id, contrat_id, payload_json, last_error, datecreate, dateupdate
+            FROM erp_patient_registration WHERE request_id = ?
+            """,
+        (rs, i) -> mapPatientRegistration(rs),
+        requestId);
+    return list.stream().findFirst().orElse(null);
+  }
+
+  public void insertPatientRegistration(
+      String requestId,
+      Long societeId,
+      Long contratId,
+      String payloadJson,
+      Long userId) {
+    jdbc.update(
+        """
+            INSERT INTO erp_patient_registration
+              (request_id, mediline_status, ayant_status, societe_id, contrat_id, payload_json, usercreateid)
+            VALUES (?, 'PENDING', 'PENDING', ?, ?, ?, ?)
+            """,
+        requestId,
+        societeId,
+        contratId,
+        payloadJson,
+        userId);
+  }
+
+  public void updatePatientRegistrationMediline(
+      String requestId, String ipp, String status, String lastError, Long userId) {
+    jdbc.update(
+        """
+            UPDATE erp_patient_registration
+            SET mediline_ipp = COALESCE(?, mediline_ipp), mediline_status = ?,
+                last_error = ?, userupdateid = ?, dateupdate = NOW()
+            WHERE request_id = ?
+            """,
+        ipp,
+        status,
+        lastError,
+        userId,
+        requestId);
+  }
+
+  public void updatePatientRegistrationAyant(
+      String requestId, Long ayantId, String status, String lastError, Long userId) {
+    jdbc.update(
+        """
+            UPDATE erp_patient_registration
+            SET ayant_id = ?, ayant_status = ?, last_error = ?, userupdateid = ?, dateupdate = NOW()
+            WHERE request_id = ?
+            """,
+        ayantId,
+        status,
+        lastError,
+        userId,
+        requestId);
+  }
+
+  private static Map<String, Object> mapPatientRegistration(java.sql.ResultSet rs) throws java.sql.SQLException {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("id", rs.getLong("id"));
+    row.put("requestId", rs.getString("request_id"));
+    row.put("medilineIpp", rs.getString("mediline_ipp"));
+    row.put("medilineStatus", rs.getString("mediline_status"));
+    row.put("ayantId", rs.getObject("ayant_id"));
+    row.put("ayantStatus", rs.getString("ayant_status"));
+    row.put("societeId", rs.getObject("societe_id"));
+    row.put("contratId", rs.getObject("contrat_id"));
+    row.put("payloadJson", rs.getString("payload_json"));
+    row.put("lastError", rs.getString("last_error"));
+    return row;
+  }
+
+  public boolean societeMedilineMappingReady(long societeId) {
+    var list = jdbc.query(
+        """
+            SELECT mediline_compte_code, mediline_mapping_status
+            FROM erp_societes WHERE id = ? AND actif = 1
+            """,
+        (rs, i) -> {
+          String code = rs.getString("mediline_compte_code");
+          String status = rs.getString("mediline_mapping_status");
+          return code != null && !code.isBlank()
+              && "MATCHED".equalsIgnoreCase(status);
+        },
+        societeId);
+    return list.stream().findFirst().orElse(false);
+  }
+
+  public Optional<String> medilineCompteCodeForSociete(long societeId) {
+    var list = jdbc.query(
+        """
+            SELECT mediline_compte_code FROM erp_societes
+            WHERE id = ? AND mediline_mapping_status = 'MATCHED'
+            """,
+        (rs, i) -> rs.getString(1),
+        societeId);
+    return list.stream().findFirst().map(String::trim).filter(s -> !s.isEmpty());
   }
 }
