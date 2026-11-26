@@ -33,7 +33,8 @@ public class ClinicLegacySyncProperties {
     /** Autorise INSERT/UPDATE paramétrés vers Beach (toujours gated par writeEntities). */
     private boolean writeEnabled = false;
     /** Entités autorisées à l'écriture Beach lorsque writeEnabled=true (ex. TCONTRAT). */
-    private String writeEntities = "TCONTRAT";
+    /** Allow-list CSV explicite — jamais « * ». Défaut minimal sûr ; override env en recette/prod. */
+    private String writeEntities = "TCONTRAT,TAYANTDROIT";
     /** Autorise DELETE physique Beach (exceptionnel). */
     private boolean deleteEnabled = false;
     /** Active le rapprochement entrant périodique CLINIQUE → ERP. */

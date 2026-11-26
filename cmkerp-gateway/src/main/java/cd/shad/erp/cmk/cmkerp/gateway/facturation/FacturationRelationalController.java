@@ -32,7 +32,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * APIs relationnelles Facturation : mappings, transactions ERP, dashboard.
- * Source de vérité = tables erp_*. Écritures Beach hors TCONTRAT non activées
+ * Source de vérité = tables erp_*. Écritures Beach gated par allow-list write-entities
  * (intentions outbox SUSPENDED conservées pour prestations / médicaments).
  */
 @RestController

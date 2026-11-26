@@ -14,11 +14,18 @@ Sur tout DataSource CLINIQUE : CREATE / ALTER / DROP / TRUNCATE, index, triggers
 ## DML
 
 - SELECT : autorisé dans le périmètre approuvé.
-- INSERT / UPDATE : uniquement via services de réplication contrôlés + feature flags.
-- DELETE : interdit par défaut ; exceptions métier validées seulement.
-- CH : `clinic.ch.write.enabled=false` — aucune écriture automatique depuis cette migration.
+- INSERT / UPDATE métier : autorisés **uniquement** via adaptateurs + outbox + `ClinicLegacyWriteGuard` + allow-list `clinic.beach.write-entities` (jamais `*`).
+- DELETE : **interdit** sur Beach (et CH) — aucune exception automatique.
+- CH : `clinic.ch.write.enabled=false` — aucune écriture.
 - Pas de `SELECT *` sur `TUTILISATEUR` (exclure `MOTDEPASSE`).
 - Jamais importer / exposer / logger les mots de passe historiques.
+- Jamais copier les tables techniques ERP (outbox, RBAC, audit) vers CLINIQUE.
+
+## Autorisation métier vs activation technique
+
+- **Autorisation métier globale** accordée pour les 15 entités listées dans `erp-mandatory-legacy-replication.mdc`.
+- **Activation technique** = allow-list explicite + adaptateur testé.
+- Ne pas confondre « autorisé métier » et « exécuté en production ».
 
 ## Architecture
 
@@ -27,15 +34,14 @@ Sur tout DataSource CLINIQUE : CREATE / ALTER / DROP / TRUNCATE, index, triggers
 - Pas de double écriture naïve sans journal / idempotence / rapprochement.
 - Compte applicatif : pas de `sa` / `db_owner` ; pas de DDL.
 
-## Feature flags (défaut sûr)
+## Feature flags (garde-fous)
 
 ```
-clinic.beach.sync.enabled=false
-clinic.beach.write.enabled=false
+clinic.beach.sync.enabled=true|false
+clinic.beach.write.enabled=true|false
+clinic.beach.write-entities=TCONTRAT,TAYANTDROIT,...   # jamais *
 clinic.beach.delete.enabled=false
 clinic.ch.write.enabled=false
 ```
-
-Activation production = autorisation explicite + validation par entité.
 
 Toute violation = anomalie de sécurité bloquante.

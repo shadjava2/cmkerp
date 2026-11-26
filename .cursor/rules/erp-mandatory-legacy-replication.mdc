@@ -1,0 +1,43 @@
+---
+description: Réplication obligatoire ERP → CLINIQUE Beach pour toute entité métier équivalente
+alwaysApply: true
+---
+
+# ERP MANDATORY LEGACY REPLICATION — MANDATORY
+
+Pendant la coexistence CMK ERP / CLINIQUE Beach, **toute entité métier ERP disposant d’un équivalent historique doit prendre en charge la réplication INSERT et UPDATE**, la synchronisation entrante, la gestion des conflits et la reprise après incident.
+
+## Autorisation métier globale (accordée)
+
+`TCONTRAT` · `TSOCIETE` · `TAYANTDROIT` · `TSERVICE` · `TCLASSE` · `TIMPUTATION` · `TARIF` · `TLOCATION` · `TMEDECIN` · `TUTILISATEUR` · `TPHARMACIE` · `TPRODUIT` · `TSTOCK` · `TMEDICAMENT` · `TPRESTATION`
+
+Ne plus bloquer le développement en attendant une autorisation métier par table pour ces entités.
+
+## Activation technique (séparée)
+
+- Liste blanche explicite `clinic.beach.write-entities` — **jamais** `*`.
+- Une entité n’est activée techniquement qu’après adaptateur conforme + tests.
+- `TSTOCK` / `TMEDICAMENT` / `TPRESTATION` : règles historiques à documenter avant activation.
+- Intentions `SUSPENDED` : examen ciblé — **pas** de reprise massive aveugle.
+
+## DoD d’une fonctionnalité métier équivalente
+
+1. Table relationnelle ERP (`erp_*`) + FK + index  
+2. Mapping identifiants historiques  
+3. Service de persistance MySQL  
+4. Intention `erp_sync_outbox` **dans la même transaction** MySQL  
+5. Adaptateur INSERT/UPDATE Beach (requêtes paramétrées)  
+6. Vérification post-écriture (relecture) avant `SYNCED`  
+7. Conflits / reprise / idempotence  
+8. RBAC + inventaire  
+9. Sync entrante ou import contrôlé si pertinent  
+
+**Build PASS ≠ livré.** MySQL seul sans réplication obligatoire = non conforme.
+
+## Hors périmètre de réplication
+
+Tables techniques ERP : outbox, RBAC, audit, registres de mapping purement ERP, `erp_patient_registration`, etc.
+
+## Interdictions (inchangées)
+
+DELETE Beach · DDL Beach/CH/Mediline · écritures CH · mots de passe · contournement de `ClinicLegacyWriteGuard`.

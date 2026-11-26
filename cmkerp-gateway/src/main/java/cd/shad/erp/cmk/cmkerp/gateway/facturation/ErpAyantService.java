@@ -29,7 +29,7 @@ import cd.shad.erp.cmk.cmkerp.platform.external.clinique.sync.ClinicLegacyWriteG
 
 /**
  * Service métier Ayants droit : persistance {@code erp_ayants_droit} + intention Outbox
- * {@code TAYANTDROIT}. Whitelist Beach reste {@code TCONTRAT} jusqu'à autorisation explicite.
+ * {@code TAYANTDROIT}. Activation technique via {@code clinic.beach.write-entities} (autorisation métier globale accordée).
  */
 @Service
 public class ErpAyantService {

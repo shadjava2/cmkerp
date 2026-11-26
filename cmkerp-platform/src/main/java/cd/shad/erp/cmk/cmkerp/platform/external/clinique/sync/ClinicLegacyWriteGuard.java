@@ -25,7 +25,7 @@ public class ClinicLegacyWriteGuard {
   }
 
   /**
-   * Vérifie write-enabled global + allow-list d'entités (ex. TCONTRAT uniquement).
+   * Vérifie write-enabled global + allow-list CSV d'entités (jamais {@code *}).
    */
   public void assertBeachEntityWriteAllowed(String entityType, String operation) {
     assertBeachWriteAllowed(operation);

@@ -7,14 +7,16 @@ alwaysApply: true
 
 ## Principes
 
-1. **Intentions ≠ exécution.** Toute opération ERP destinée à CLINIQUE est journalisée dans `erp_sync_outbox` même si les écritures SQL Server sont désactivées (`SUSPENDED`).
-2. **Écritures Beach** : uniquement via worker outbox + `ClinicLegacyWriteGuard` + feature flags (`clinic.beach.write-enabled`, défaut `false`).
-3. **Imports CLINIQUE → ERP** : SELECT SQL Server + INSERT MySQL ; **pas** d’outbox retour.
-4. **`actif`** : propriété exclusivement ERP — jamais répliquée.
-5. **TCONTRAT** : colonnes réplicables `CODE`, `DESIGNATION` uniquement.
-6. **CLINIQUE CH / Mediline** : aucune écriture dans ce chantier.
-7. **Idempotence** : `operation_id` unique ; pas de double INSERT ; relance via le même moteur.
-8. **UI** : centre de synchronisation = supervision + file + référentiels ; import sélectif via `ErpImportDialog` ; pas de dialogues natifs.
+1. **Intentions ≠ exécution.** Toute opération ERP destinée à CLINIQUE est journalisée dans `erp_sync_outbox` même si l’entité n’est pas encore dans l’allow-list technique (`SUSPENDED`).
+2. **Écritures Beach** : uniquement via worker outbox + `ClinicLegacyWriteGuard` + allow-list explicite (`clinic.beach.write-entities`, jamais `*`).
+3. **Autorisation métier globale** : les 15 entités métier listées dans `erp-mandatory-legacy-replication.mdc` sont couvertes ; l’activation technique reste progressive et testée.
+4. **Imports CLINIQUE → ERP** : SELECT SQL Server + INSERT MySQL ; **pas** d’outbox retour automatique (anti-boucle).
+5. **`actif`** : propriété exclusivement ERP — jamais répliquée.
+6. **Colonnes réplicables** : définies par adaptateur / catalogue — jamais inventées.
+7. **CLINIQUE CH** : aucune écriture. **Mediline** : écritures limitées au protocole DMI autorisé.
+8. **Idempotence** : `operation_id` unique ; relecture Beach avant `SYNCED` ; timeout → vérifier présence avant rejeu.
+9. **Dépendances** : contrat → société → ayant ; services/classes/imputations → tarifs ; produits → stock/médicaments.
+10. **UI** : centre de synchronisation = supervision + file + référentiels ; import sélectif via `ErpImportDialog` ; pas de dialogues natifs.
 
 ## Statuts outbox
 
@@ -22,6 +24,7 @@ alwaysApply: true
 
 ## Ne pas
 
-- Perdre une intention parce que `write-enabled=false`.
-- Activer les écritures production sans autorisation explicite.
-- Présenter un référentiel non intégré comme synchronisable.
+- Perdre une intention parce qu’une entité n’est pas encore activée techniquement.
+- Rejouer en masse toutes les intentions `SUSPENDED` historiques.
+- Présenter une entité comme « À jour » si l’état réel est `SUSPENDED` / `PENDING` / `FAILED` / `CONFLICT`.
+- Activer `TSTOCK` / `TMEDICAMENT` / `TPRESTATION` sans règles historiques documentées.

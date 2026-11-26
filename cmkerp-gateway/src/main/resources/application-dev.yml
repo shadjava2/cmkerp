@@ -6,12 +6,14 @@
 # ==========================================
 # DATASOURCES - Variables d'environnement avec valeurs par défaut DEV
 # ==========================================
-# Coexistence CLINIQUE — défauts sûrs (aucune écriture SQL Server nouvelle)
+# Coexistence CLINIQUE — allow-list explicite (jamais *). DELETE/DDL Beach interdits. CH = off.
+# Autorisation métier globale documentée dans erp-mandatory-legacy-replication.mdc ;
+# l'activation technique reste celle de write-entities (override via CLINIC_BEACH_WRITE_ENTITIES).
 clinic:
   beach:
     sync-enabled: ${CLINIC_BEACH_SYNC_ENABLED:false}
     write-enabled: ${CLINIC_BEACH_WRITE_ENABLED:false}
-    write-entities: ${CLINIC_BEACH_WRITE_ENTITIES:TCONTRAT}
+    write-entities: ${CLINIC_BEACH_WRITE_ENTITIES:TCONTRAT,TAYANTDROIT}
     delete-enabled: ${CLINIC_BEACH_DELETE_ENABLED:false}
     inbound-enabled: ${CLINIC_BEACH_INBOUND_ENABLED:false}
     inbound-interval-ms: ${CLINIC_BEACH_INBOUND_INTERVAL_MS:60000}

@@ -1,16 +1,17 @@
-# AGENTS.md — CMK ERP
+﻿# AGENTS.md — CMK ERP
 
-## Sept standards architecturaux permanents
+## Huit standards architecturaux permanents
 
 | Standard | Fichier | Responsabilité |
 | --- | --- | --- |
 | RBAC Security | `.cursor/rules/rbac-security.mdc` | Autorisations et sécurité |
 | CMK Design System | `.cursor/rules/cmk-design-system.mdc` | Cohérence visuelle et ergonomique |
 | CLINIQUE Legacy Protection | `.cursor/rules/clinic-legacy-protection.mdc` | Intégrité des bases historiques SQL Server |
+| Mandatory Legacy Replication | `.cursor/rules/erp-mandatory-legacy-replication.mdc` | Réplication INSERT/UPDATE obligatoire des entités équivalentes |
 | Production Release | `.cursor/rules/production-release-standard.mdc` | Qualité produit, UI métier, zéro prototypage |
 | Bidirectional Synchronization | `.cursor/rules/clinic-bidirectional-sync.mdc` | Outbox, réplication, rapprochement |
 | ERP Relational Data | `.cursor/rules/erp-relational-data-standard.mdc` | Tables métier, FK, libellés, sélecteurs |
-| Recherche patient unifiée | `../.cursor/rules/unified-patient-search.mdc` | Moteur Mediline commun DMI / Facturation / ERP |
+| Recherche patient unifiée | `.cursor/rules/unified-patient-search.mdc` | Moteur Mediline commun DMI / Facturation / ERP |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
 
@@ -20,14 +21,17 @@ CMK ERP est **une seule application**, plusieurs espaces métier. On change de m
 
 **Recherche patient** : un seul moteur Mediline (`buildPatientQuickSearchCriteria` + `POST /api/v1/cardex/patients/recherche` + `PatientSearchPanel` / `PatientPicker`). Modes NAVIGATION (DMI) et SELECTION (formulaires ERP). Interdit de dupliquer la logique de recherche.
 
-**Chantier 02 (DMI × Facturation)** : `POST /api/v1/dmi/registrations`, registre `erp_patient_registration`, mapping société ↔ compte Mediline (V36). Voir `docs/integration/CHANTIER02_DMI_FACTURATION_INTEGRATION_REPORT.md`.
+**Chantier 02 (DMI × Facturation)** : création dossier + affiliation via `POST /api/v1/dmi/registrations` et registre `erp_patient_registration` ; sociétés ERP reliées aux comptes Mediline (`V36`, `AffiliationEditor`, `docs/integration/CHANTIER02_DMI_FACTURATION_INTEGRATION_REPORT.md`). Mapping société obligatoire pour une affiliation ; reprise idempotente par `request_id`.
 
 **Sélecteurs FK** : petit référentiel → ComboBox ; volume moyen → `ErpSearchableCombobox` ; complexe → Picker. Interdit : input de recherche + `<select>` pour la même clé étrangère.
 
 ### Migration CLINIQUE (coexistence)
 
 - Nouvelles structures = MySQL `erp_*` uniquement.
-- SQL Server Beach/CH = schéma **immuable** ; DML via outbox + feature flags (défaut off).
+- SQL Server Beach/CH = schéma **immuable** (aucun DDL) ; **DELETE Beach interdit**.
+- **Autorisation métier globale** INSERT/UPDATE pour les 15 entités listées dans `erp-mandatory-legacy-replication.mdc`.
+- **Activation technique** via allow-list `CLINIC_BEACH_WRITE_ENTITIES` (jamais `*`) après adaptateur testé.
+- CH : aucune écriture. Pas de reprise massive des intentions `SUSPENDED`.
 - Documentation : `docs/integration/CLINIQUE_*.md`
 - Contrôle : `cmkerp/scripts/clinic-legacy-compliance-check.sh`
 
@@ -100,9 +104,21 @@ Un module n'est **pas** livré tant que les preuves suivantes existent sur la **
 
 **Build PASS ≠ disponibilité.** Distinguer tests statiques (compliance, compilation) et vérifications d'intégration (SQL + session + UI).
 
+### Livraison frontend (`consolenotification`) — obligatoire
+
+Avant tout commit déclaré prêt pour recette UI :
+
+1. `npx tsc --noEmit` — PASS
+2. `npm run build` — PASS
+3. Vérifier les routes / pages nouvellement ajoutées (imports réels, pas de chemin inventé)
+4. Conserver le RBAC (`PermissionGate` = `@/components/security/PermissionGate`)
+
+Un gateway UP ou un JAR compilé **ne remplace pas** une preuve frontend. Une erreur Vite d’import est un **blocage de livraison**, pas un détail cosmétique.
+
 Livrer sans couverture RBAC = violation du standard architectural.
 
 ### Contrôle CI bloquant
 
 `cmkerp/scripts/rbac-compliance-check.sh` doit rester vert. Toute livraison sans couverture RBAC complète est rejetée.
+
 
