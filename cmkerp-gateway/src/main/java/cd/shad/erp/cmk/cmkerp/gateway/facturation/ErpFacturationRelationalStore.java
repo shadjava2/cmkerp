@@ -2573,6 +2573,29 @@ public class ErpFacturationRelationalStore {
     return jdbc.query(sql.toString(), (rs, i) -> mapSocieteMedilineMappingRow(rs), args.toArray());
   }
 
+  /** Projection légère pour analyse de rapprochement (hors clamp UI 500). */
+  public List<Map<String, Object>> listAllSocieteMedilineMappings(String status, int hardLimit) {
+    int limit = Math.min(Math.max(hardLimit, 1), 10_000);
+    StringBuilder sql = new StringBuilder(
+        """
+            SELECT s.id, s.code, s.designation, s.fk_contrat,
+                   c.code AS contrat_code, c.designation AS contrat_designation,
+                   s.mediline_compte_code, s.mediline_compte_intitule, s.mediline_mapping_status,
+                   s.mediline_mapping_verified_at, s.mediline_mapping_verified_by, s.actif
+            FROM erp_societes s
+            LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
+            WHERE 1=1
+            """);
+    var args = new ArrayList<Object>();
+    if (status != null && !status.isBlank()) {
+      sql.append(" AND s.mediline_mapping_status = ?");
+      args.add(status.trim().toUpperCase(Locale.ROOT));
+    }
+    sql.append(" ORDER BY s.code ASC LIMIT ?");
+    args.add(limit);
+    return jdbc.query(sql.toString(), (rs, i) -> mapSocieteMedilineMappingRow(rs), args.toArray());
+  }
+
   public long countSocieteMedilineMappings(String q, String status) {
     StringBuilder sql = new StringBuilder(
         """

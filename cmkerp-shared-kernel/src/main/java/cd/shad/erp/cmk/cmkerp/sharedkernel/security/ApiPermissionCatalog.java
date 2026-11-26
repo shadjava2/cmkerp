@@ -243,6 +243,14 @@ public final class ApiPermissionCatalog {
     rule("GET", "/api/v1/facturation/mappings/societe-comptes/suggestions",
         "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
         "SIDEBAR_FACTURATION_SOCIETES");
+    rule("POST", "/api/v1/facturation/mappings/societe-comptes/match/analyze",
+        "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
+        "SIDEBAR_FACTURATION_SOCIETES");
+    rule("GET", "/api/v1/facturation/mappings/societe-comptes/match",
+        "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
+        "SIDEBAR_FACTURATION_SOCIETES");
+    rule("POST", "/api/v1/facturation/mappings/societe-comptes/match/batch-validate",
+        "FACTURATION_SOCIETES_UPDATE");
 
     // Consolidation UAT : rapprochement Mediline + imports historiques (lecture Beach → MySQL)
     rule("GET", "/api/v1/facturation/patients/match",

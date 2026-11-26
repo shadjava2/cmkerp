@@ -25,6 +25,7 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Chart évolution / table produits | `FACTURATION_DASHBOARD_CHART_EVOLUTION_VIEW` / `…_TABLE_PRODUITS_VIEW` | `SIDEBAR_FACTURATION_ACCUEIL` | OK |
 | Contrats (types TCONTRAT) | `SIDEBAR_FACTURATION_CONTRATS` + `FACTURATION_CONTRATS_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/contrats/**` ; classification bénéficiaire (`libelle_beneficiaire`, `mediline_categorie_code`) via CREATE/UPDATE contrats ; lookup `GET /lookups/mediline-categories` |
 | Couverture affiliation (PEC) | `FACTURATION_AYANTSDROIT_*` + `DMI_*_NOUVEAU_DOSSIER` | `MODULE_FACTURATION` / DMI | OK — `POST /api/v1/facturation/ayants/coverage/preview` |
+| Rapprochement sociétés ↔ Mediline | `FACTURATION_SOCIETES_VIEW` / `UPDATE` | `MODULE_FACTURATION` | OK — analyze / proposals / batch-validate sous `/mappings/societe-comptes/match/**` |
 | Synchronisation CLINIQUE | `SIDEBAR_FACTURATION_SYNCHRONISATION` + `FACTURATION_SYNC_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/clinic-sync/**` |
 | Locations | `SIDEBAR_FACTURATION_LOCATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
 | Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` + `FACTURATION_AYANTSDROIT_*` | `MODULE_FACTURATION` | OK — recherche patient via catalogue cardex (`FACTURATION_AYANTSDROIT_VIEW/CREATE`, sans `MODULE_DMI`) |

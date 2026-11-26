@@ -1,11 +1,8 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -45,6 +42,7 @@ public class FacturationRelationalController {
 
   private final ErpFacturationRelationalStore store;
   private final SocieteMedilineMappingService societeMedilineMappingService;
+  private final SocieteMedilineMatchingService societeMedilineMatchingService;
   private final JwtTokenProvider jwtTokenProvider;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
@@ -54,6 +52,7 @@ public class FacturationRelationalController {
   public FacturationRelationalController(
       ErpFacturationRelationalStore store,
       SocieteMedilineMappingService societeMedilineMappingService,
+      SocieteMedilineMatchingService societeMedilineMatchingService,
       JwtTokenProvider jwtTokenProvider,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
@@ -61,6 +60,7 @@ public class FacturationRelationalController {
       @Autowired(required = false) @Qualifier("medilineJdbcTemplate") JdbcTemplate medilineJdbc) {
     this.store = store;
     this.societeMedilineMappingService = societeMedilineMappingService;
+    this.societeMedilineMatchingService = societeMedilineMatchingService;
     this.jwtTokenProvider = jwtTokenProvider;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
@@ -264,72 +264,70 @@ public class FacturationRelationalController {
     return ResponseEntity.ok(result);
   }
 
+  @PostMapping("/mappings/societe-comptes/match/analyze")
+  public ResponseEntity<Map<String, Object>> analyzeSocieteMedilineMatches(
+      @RequestParam(defaultValue = "true") boolean force) {
+    return ResponseEntity.ok(societeMedilineMatchingService.analyze(force));
+  }
+
+  @GetMapping("/mappings/societe-comptes/match/stats")
+  public ResponseEntity<Map<String, Object>> societeMedilineMatchStats() {
+    return ResponseEntity.ok(societeMedilineMatchingService.stats());
+  }
+
+  @GetMapping("/mappings/societe-comptes/match/proposals")
+  public ResponseEntity<Map<String, Object>> societeMedilineMatchProposals(
+      @RequestParam(required = false) String level,
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "50") int size) {
+    return ResponseEntity.ok(societeMedilineMatchingService.listProposals(level, q, page, size));
+  }
+
+  @PostMapping("/mappings/societe-comptes/match/batch-validate")
+  public ResponseEntity<Map<String, Object>> batchValidateSocieteMedilineMatches(
+      @RequestBody Map<String, Object> body,
+      HttpServletRequest request) {
+    Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
+    Object raw = body == null ? null : body.get("items");
+    List<Map<String, Object>> items = new ArrayList<>();
+    if (raw instanceof List<?> list) {
+      for (Object o : list) {
+        if (o instanceof Map<?, ?> m) {
+          Map<String, Object> row = new LinkedHashMap<>();
+          m.forEach((k, v) -> {
+            if (k != null) {
+              row.put(String.valueOf(k), v);
+            }
+          });
+          items.add(row);
+        }
+      }
+    }
+    return ResponseEntity.ok(societeMedilineMatchingService.batchValidate(items, userId));
+  }
+
+  /** Compatibilité : anciennes suggestions → propositions du moteur mutualisé. */
   @GetMapping("/mappings/societe-comptes/suggestions")
   public ResponseEntity<Map<String, Object>> societeMedilineSuggestions(
       @RequestParam(required = false) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "40") int size) {
-    if (medilineJdbc == null) {
-      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Mediline indisponible.");
+    Map<String, Object> proposals = societeMedilineMatchingService.listProposals("ALL", q, page, size);
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> items = (List<Map<String, Object>>) proposals.getOrDefault("items", List.of());
+    List<Map<String, Object>> legacy = new ArrayList<>();
+    for (Map<String, Object> row : items) {
+      Map<String, Object> out = new LinkedHashMap<>(row);
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> candidates =
+          (List<Map<String, Object>>) row.getOrDefault("candidates", List.of());
+      out.put("suggestions", candidates);
+      legacy.add(out);
     }
-    int safeSize = Math.min(Math.max(size, 1), 100);
-    int safePage = Math.max(page, 0);
-    List<Map<String, Object>> societes = store.listSocieteMedilineMappings(
-        q, "UNMATCHED", safeSize, safePage * safeSize);
-    long total = store.countSocieteMedilineMappings(q, "UNMATCHED");
-    List<Map<String, Object>> comptes = medilineJdbc.queryForList(
-        """
-            SELECT CODE, INTITULE, CATEGORIE_PATIENT, ETAT
-            FROM t_compte
-            WHERE CODE <> ''
-            ORDER BY INTITULE, CODE
-            LIMIT 4000
-            """);
-    List<Map<String, Object>> items = new ArrayList<>();
-    for (Map<String, Object> societe : societes) {
-      String designation = String.valueOf(societe.getOrDefault("societeDesignation", ""));
-      String code = String.valueOf(societe.getOrDefault("societeCode", ""));
-      String normDes = normalizeLabel(designation);
-      String normCode = normalizeLabel(code);
-      List<Map<String, Object>> suggestions = new ArrayList<>();
-      for (Map<String, Object> compte : comptes) {
-        String compteCode = String.valueOf(compte.getOrDefault("CODE", ""));
-        String intitule = String.valueOf(compte.getOrDefault("INTITULE", ""));
-        String normIntitule = normalizeLabel(intitule);
-        String normCompteCode = normalizeLabel(compteCode);
-        int score = 0;
-        if (!normCode.isEmpty() && normCode.equals(normCompteCode)) {
-          score = 100;
-        } else if (!normDes.isEmpty() && normDes.equals(normIntitule)) {
-          score = 95;
-        } else if (!normDes.isEmpty() && (normIntitule.contains(normDes) || normDes.contains(normIntitule))) {
-          score = 80;
-        } else {
-          score = tokenOverlapScore(normDes, normIntitule);
-        }
-        if (score < 55) {
-          continue;
-        }
-        Map<String, Object> suggestion = new LinkedHashMap<>();
-        suggestion.put("medilineCompteCode", compteCode);
-        suggestion.put("medilineCompteIntitule", intitule);
-        suggestion.put("categoriePatient", compte.get("CATEGORIE_PATIENT"));
-        suggestion.put("score", score);
-        suggestions.add(suggestion);
-      }
-      suggestions.sort(Comparator.comparingInt((Map<String, Object> s) -> ((Number) s.get("score")).intValue()).reversed());
-      if (suggestions.size() > 3) {
-        suggestions = suggestions.subList(0, 3);
-      }
-      Map<String, Object> row = new LinkedHashMap<>(societe);
-      row.put("suggestions", suggestions);
-      items.add(row);
-    }
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("items", items);
-    result.put("total", total);
-    result.put("page", safePage);
-    result.put("size", safeSize);
+    Map<String, Object> result = new LinkedHashMap<>(proposals);
+    result.put("items", legacy);
+    result.put("total", proposals.getOrDefault("filteredTotal", proposals.get("unmatchedTotal")));
     result.put("validationRequired", true);
     return ResponseEntity.ok(result);
   }
@@ -623,39 +621,4 @@ public class FacturationRelationalController {
     }
   }
 
-  private static String normalizeLabel(String raw) {
-    if (raw == null || raw.isBlank()) {
-      return "";
-    }
-    String nfd = Normalizer.normalize(raw.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD);
-    return nfd.replaceAll("\\p{M}+", "").replaceAll("[^a-z0-9]+", " ").trim().replaceAll("\\s+", " ");
-  }
-
-  private static int tokenOverlapScore(String left, String right) {
-    if (left.isEmpty() || right.isEmpty()) {
-      return 0;
-    }
-    String[] a = left.split(" ");
-    String[] b = right.split(" ");
-    if (a.length == 0 || b.length == 0) {
-      return 0;
-    }
-    int hits = 0;
-    for (String token : a) {
-      if (token.length() < 3) {
-        continue;
-      }
-      for (String other : b) {
-        if (token.equals(other)) {
-          hits++;
-          break;
-        }
-      }
-    }
-    if (hits == 0) {
-      return 0;
-    }
-    int denom = Math.max(a.length, b.length);
-    return Math.min(90, (int) Math.round((hits * 100.0) / denom));
-  }
 }
