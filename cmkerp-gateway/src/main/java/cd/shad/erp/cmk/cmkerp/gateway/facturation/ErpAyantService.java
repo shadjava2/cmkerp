@@ -219,6 +219,10 @@ public class ErpAyantService {
     var location = store.findLocationDetail(locationId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Location introuvable."));
 
+    if (str(body.get("medilineIpp")) == null) {
+      body = new LinkedHashMap<>(body);
+      body.put("medilineIpp", current.get("medilineIpp"));
+    }
     HolderResolution holder = resolveHolder(relation, matricule, body);
     String nomComplet = firstNonBlank(str(body.get("nomComplet")), str(current.get("nomComplet")));
     String sexe = normalizeSexe(firstNonBlank(str(body.get("sexe")), str(current.get("sexe"))));
@@ -295,6 +299,7 @@ public class ErpAyantService {
     Long fkTitulaire = longOrNull(body.get("titulaireId"));
     String titulaireIpp = str(body.get("titulaireIpp"));
     String codeFamille = str(body.get("codeFamille"));
+    String selfIpp = normalizeIpp(str(body.get("medilineIpp")));
     if (fkTitulaire != null) {
       Map<String, Object> tit = store.findAyantDetail(fkTitulaire)
           .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -312,11 +317,28 @@ public class ErpAyantService {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Le titulaire est obligatoire pour ce lien de parenté.");
     }
+    String holderIpp = normalizeIpp(titulaireIpp);
+    if (selfIpp != null && holderIpp != null && selfIpp.equals(holderIpp)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Le patient ne peut pas être son propre titulaire.");
+    }
+    if (selfMatricule != null && !selfMatricule.isBlank()
+        && codeFamille.trim().equalsIgnoreCase(selfMatricule.trim())) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Le patient ne peut pas être son propre titulaire.");
+    }
     if (codeFamille.length() > BEACH_MATRICULE_MAX) {
       throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
           "Le matricule du titulaire dépasse la limite historique CLINIQUE (10 caractères).");
     }
     return new HolderResolution(codeFamille, fkTitulaire, titulaireIpp);
+  }
+
+  private static String normalizeIpp(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return null;
+    }
+    return raw.trim().toUpperCase();
   }
 
   private String resolveBeachMatricule(String medilineIpp, String historiqueHint) {
