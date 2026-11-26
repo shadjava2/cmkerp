@@ -44,6 +44,18 @@ CMK ERP est un **produit hospitalier de production**, pas une démonstration, ma
 5. Mutualiser via un composant partagé (ex. `ErpImportDialog`) ; configurations métier différentes, pas de SQL arbitraire côté client.
 6. SQL Server CLINIQUE : **SELECT uniquement** ; écritures uniquement MySQL ERP.
 
+## Livraison frontend (bloquant)
+
+Toute livraison touchant `consolenotification` doit obligatoirement passer :
+
+1. `npx tsc --noEmit` — **PASS**
+2. `npm run build` — **PASS**
+3. Contrôle des **routes nouvellement ajoutées** (import résolu, page chargeable, pas d’écran blanc Vite)
+4. Imports alignés sur les chemins réels du dépôt (ex. `@/components/security/PermissionGate` — jamais un chemin inventé)
+
+Un health UP du gateway ou un build backend **ne prouve pas** que le frontend démarre.  
+Aucun commit ne doit être déclaré prêt pour recette si une erreur d’importation empêche le chargement de l’application.
+
 ## Documentation
 
 Les explications techniques, architectures et procédures développeur restent dans `docs/` du dépôt — jamais dans l’UI métier.
