@@ -194,6 +194,16 @@ public final class ApiPermissionCatalog {
     rule("POST", "/api/v1/facturation/billing/medicaments",
         "FACTURATION_MEDICAMENTS_CREATE");
 
+    // Ayants droit — API métier dédiée (erp_ayants_droit + outbox TAYANTDROIT)
+    rule("GET", "/api/v1/facturation/ayants/meta",
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
+    rule("GET", "/api/v1/facturation/ayants",
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
+    rule("POST", "/api/v1/facturation/ayants",
+        "FACTURATION_AYANTSDROIT_CREATE");
+    rule("PUT", "/api/v1/facturation/ayants",
+        "FACTURATION_AYANTSDROIT_UPDATE", "FACTURATION_AYANTSDROIT_STATUS_UPDATE");
+
     // Consolidation UAT : rapprochement Mediline + imports historiques (lecture Beach → MySQL)
     rule("GET", "/api/v1/facturation/patients/match",
         "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");

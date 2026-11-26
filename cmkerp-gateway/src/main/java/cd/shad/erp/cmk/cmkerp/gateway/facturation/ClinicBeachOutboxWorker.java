@@ -44,6 +44,7 @@ public class ClinicBeachOutboxWorker {
   private final ErpContratRepository repository;
   private final ClinicReferentialRepository referentialRepository;
   private final ClinicReferentialLegacyWriter referentialWriter;
+  private final ErpFacturationRelationalStore relationalStore;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
   private final JdbcTemplate cliniqueJdbc;
@@ -53,6 +54,7 @@ public class ClinicBeachOutboxWorker {
       ErpContratRepository repository,
       ClinicReferentialRepository referentialRepository,
       ClinicReferentialLegacyWriter referentialWriter,
+      ErpFacturationRelationalStore relationalStore,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
       PlatformTransactionManager transactionManager,
@@ -60,6 +62,7 @@ public class ClinicBeachOutboxWorker {
     this.repository = repository;
     this.referentialRepository = referentialRepository;
     this.referentialWriter = referentialWriter;
+    this.relationalStore = relationalStore;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
     this.cliniqueJdbc = cliniqueJdbc;
@@ -138,6 +141,9 @@ public class ClinicBeachOutboxWorker {
         if ("TCONTRAT".equalsIgnoreCase(entity)) {
           applyTcontrat(row);
           requiresNewTx.executeWithoutResult(status -> verifyAndCompleteTcontrat(row));
+        } else if ("TAYANTDROIT".equalsIgnoreCase(entity)) {
+          applyReferential(row, entity);
+          requiresNewTx.executeWithoutResult(status -> verifyAndCompleteAyant(row));
         } else {
           applyReferential(row, entity);
           requiresNewTx.executeWithoutResult(status -> {
@@ -238,6 +244,32 @@ public class ClinicBeachOutboxWorker {
       return;
     }
     throw new IllegalStateException("Opération non supportée: " + op);
+  }
+
+  private void verifyAndCompleteAyant(Map<String, Object> row) {
+    long outboxId = ((Number) row.get("id")).longValue();
+    try {
+      if (cliniqueJdbc == null) {
+        repository.markOutboxUncertain(outboxId, "Datasource CLINIQUE Beach indisponible");
+        return;
+      }
+      String key = String.valueOf(row.get("legacyKey"));
+      Integer exists = cliniqueJdbc.query(
+          "SELECT COUNT(*) FROM dbo.TAYANTDROIT WHERE RTRIM(MATRICULE) = ?",
+          rs -> rs.next() ? rs.getInt(1) : 0,
+          key);
+      if (exists == null || exists <= 0) {
+        repository.markOutboxUncertain(outboxId, "Écriture TAYANTDROIT non confirmée dans CLINIQUE");
+        return;
+      }
+      repository.markOutboxSynced(outboxId);
+      Object entityId = row.get("entityId");
+      if (entityId instanceof Number n) {
+        relationalStore.markAyantSynced(n.longValue(), null);
+      }
+    } catch (Exception ex) {
+      repository.markOutboxUncertain(outboxId, ex.getMessage());
+    }
   }
 
   private void verifyAndCompleteTcontrat(Map<String, Object> row) {

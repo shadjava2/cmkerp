@@ -205,6 +205,391 @@ public class ErpFacturationRelationalStore {
         userId, id, version);
   }
 
+  /** Création métier ERP (source OPERATION_ERP) — identité Mediline + affiliation. */
+  public long insertAyantErp(
+      String matricule,
+      String nomComplet,
+      String sexe,
+      LocalDate dateNaissance,
+      String nationalite,
+      String relation,
+      String codeFamille,
+      Long fkTitulaire,
+      String titulaireIpp,
+      Long fkSociete,
+      String legacyCodesoc,
+      Long fkContrat,
+      String legacyContrat,
+      Long medilinePatientId,
+      String medilineIpp,
+      String assurance,
+      String covid,
+      Long fkLocation,
+      String legacyLocation,
+      String sourceLegacy,
+      String syncStatus,
+      String fingerprint,
+      Long userId) {
+    KeyHolder keys = new GeneratedKeyHolder();
+    jdbc.update(con -> {
+      var ps = con.prepareStatement(
+          """
+              INSERT INTO erp_ayants_droit
+                (matricule, nom_complet, sexe, date_naissance, nationalite, relation, code_famille,
+                 fk_titulaire, titulaire_ipp, fk_societe, legacy_codesoc, fk_contrat, legacy_contrat_code,
+                 mediline_patient_id, mediline_ipp, patient_link_status, assurance, covid,
+                 fk_location, legacy_location_code, source_legacy, actif, source_system, legacy_code,
+                 sync_status, sync_fingerprint, version, usercreateid, userupdateid)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LINKED', ?, ?, ?, ?, ?, 1,
+                      'OPERATION_ERP', ?, ?, ?, 1, ?, ?)
+              """,
+          java.sql.Statement.RETURN_GENERATED_KEYS);
+      int i = 1;
+      ps.setString(i++, trim(matricule));
+      ps.setString(i++, trim(nomComplet));
+      ps.setString(i++, trim(sexe));
+      if (dateNaissance == null) {
+        ps.setObject(i++, null);
+      } else {
+        ps.setDate(i++, Date.valueOf(dateNaissance));
+      }
+      ps.setString(i++, trim(nationalite));
+      ps.setString(i++, trim(relation));
+      ps.setString(i++, trim(codeFamille));
+      setLong(ps, i++, fkTitulaire);
+      ps.setString(i++, trim(titulaireIpp));
+      setLong(ps, i++, fkSociete);
+      ps.setString(i++, trim(legacyCodesoc));
+      setLong(ps, i++, fkContrat);
+      ps.setString(i++, trim(legacyContrat));
+      setLong(ps, i++, medilinePatientId);
+      ps.setString(i++, trim(medilineIpp));
+      ps.setString(i++, trim(assurance));
+      ps.setString(i++, trim(covid));
+      setLong(ps, i++, fkLocation);
+      ps.setString(i++, trim(legacyLocation));
+      ps.setString(i++, trim(sourceLegacy));
+      ps.setString(i++, trim(matricule));
+      ps.setString(i++, syncStatus);
+      ps.setString(i++, fingerprint);
+      setLong(ps, i++, userId);
+      setLong(ps, i, userId);
+      return ps;
+    }, keys);
+    Number key = keys.getKey();
+    if (key == null) {
+      throw new IllegalStateException("Insertion ayant droit sans identifiant généré");
+    }
+    return key.longValue();
+  }
+
+  public int updateAyantErp(
+      long id,
+      String nomComplet,
+      String sexe,
+      LocalDate dateNaissance,
+      String nationalite,
+      String relation,
+      String codeFamille,
+      Long fkTitulaire,
+      String titulaireIpp,
+      Long fkSociete,
+      String legacyCodesoc,
+      Long fkContrat,
+      String legacyContrat,
+      String assurance,
+      String covid,
+      Long fkLocation,
+      String legacyLocation,
+      String sourceLegacy,
+      String syncStatus,
+      String fingerprint,
+      int version,
+      Long userId) {
+    return jdbc.update(
+        """
+            UPDATE erp_ayants_droit
+            SET nom_complet = ?, sexe = ?, date_naissance = ?, nationalite = ?, relation = ?,
+                code_famille = ?, fk_titulaire = ?, titulaire_ipp = ?,
+                fk_societe = ?, legacy_codesoc = ?, fk_contrat = ?, legacy_contrat_code = ?,
+                assurance = ?, covid = ?, fk_location = ?, legacy_location_code = ?, source_legacy = ?,
+                sync_status = ?, sync_fingerprint = ?, version = version + 1,
+                userupdateid = ?, dateupdate = NOW()
+            WHERE id = ? AND version = ?
+            """,
+        trim(nomComplet),
+        trim(sexe),
+        dateNaissance == null ? null : Date.valueOf(dateNaissance),
+        trim(nationalite),
+        trim(relation),
+        trim(codeFamille),
+        fkTitulaire,
+        trim(titulaireIpp),
+        fkSociete,
+        trim(legacyCodesoc),
+        fkContrat,
+        trim(legacyContrat),
+        trim(assurance),
+        trim(covid),
+        fkLocation,
+        trim(legacyLocation),
+        trim(sourceLegacy),
+        syncStatus,
+        fingerprint,
+        userId,
+        id,
+        version);
+  }
+
+  public Optional<Map<String, Object>> findAyantDetail(long id) {
+    var list = jdbc.query(
+        """
+            SELECT a.id, a.matricule, a.nom_complet, a.sexe, a.date_naissance, a.nationalite, a.relation,
+                   a.code_famille, a.fk_titulaire, a.titulaire_ipp,
+                   a.fk_societe, a.legacy_codesoc, soc.code AS societe_code, soc.designation AS societe_designation,
+                   a.fk_contrat, a.legacy_contrat_code, ctr.code AS contrat_code, ctr.designation AS contrat_designation,
+                   a.mediline_ipp, a.mediline_patient_id, a.patient_link_status,
+                   a.assurance, a.covid, a.fk_location, a.legacy_location_code, loc.libelle AS location_libelle,
+                   a.source_legacy, a.actif, a.source_system, a.legacy_code, a.sync_status, a.version,
+                   a.last_synced_at, a.sync_fingerprint,
+                   tit.nom_complet AS titulaire_nom, tit.matricule AS titulaire_matricule
+            FROM erp_ayants_droit a
+            LEFT JOIN erp_societes soc ON soc.id = a.fk_societe
+            LEFT JOIN erp_contrats ctr ON ctr.id = a.fk_contrat
+            LEFT JOIN erp_locations loc ON loc.id = a.fk_location
+            LEFT JOIN erp_ayants_droit tit ON tit.id = a.fk_titulaire
+            WHERE a.id = ?
+            """,
+        (rs, i) -> mapAyantDetail(rs),
+        id);
+    return list.stream().findFirst();
+  }
+
+  public Optional<Map<String, Object>> findAyantByMatricule(String matricule) {
+    String m = trim(matricule);
+    if (m == null || m.isBlank()) {
+      return Optional.empty();
+    }
+    var list = jdbc.query(
+        "SELECT id FROM erp_ayants_droit WHERE matricule = ? LIMIT 1",
+        (rs, i) -> rs.getLong(1),
+        m);
+    if (list.isEmpty()) {
+      return Optional.empty();
+    }
+    return findAyantDetail(list.get(0));
+  }
+
+  public Optional<Map<String, Object>> findAyantByMedilineIpp(String ipp) {
+    String v = trim(ipp);
+    if (v == null || v.isBlank()) {
+      return Optional.empty();
+    }
+    var list = jdbc.query(
+        "SELECT id FROM erp_ayants_droit WHERE mediline_ipp = ? ORDER BY id LIMIT 1",
+        (rs, i) -> rs.getLong(1),
+        v);
+    if (list.isEmpty()) {
+      return Optional.empty();
+    }
+    return findAyantDetail(list.get(0));
+  }
+
+  public Map<String, Object> searchAyantsFiltered(
+      String q,
+      Long societeId,
+      Long contratId,
+      Long locationId,
+      Boolean actif,
+      String patientLinkStatus,
+      String syncStatus,
+      int limit,
+      int offset) {
+    StringBuilder from = new StringBuilder(
+        """
+            FROM erp_ayants_droit a
+            LEFT JOIN erp_societes soc ON soc.id = a.fk_societe
+            LEFT JOIN erp_contrats ctr ON ctr.id = a.fk_contrat
+            LEFT JOIN erp_locations loc ON loc.id = a.fk_location
+            WHERE 1=1
+            """);
+    List<Object> args = new ArrayList<>();
+    appendTextFilter(from, args, q,
+        "a.matricule", "a.nom_complet", "a.mediline_ipp", "soc.designation", "soc.code",
+        "ctr.designation", "ctr.code");
+    if (societeId != null) {
+      from.append(" AND a.fk_societe = ?");
+      args.add(societeId);
+    }
+    if (contratId != null) {
+      from.append(" AND a.fk_contrat = ?");
+      args.add(contratId);
+    }
+    if (locationId != null) {
+      from.append(" AND a.fk_location = ?");
+      args.add(locationId);
+    }
+    appendActif(from, args, actif, "a.actif");
+    if (patientLinkStatus != null && !patientLinkStatus.isBlank()) {
+      from.append(" AND a.patient_link_status = ?");
+      args.add(patientLinkStatus.trim().toUpperCase(Locale.ROOT));
+    }
+    if (syncStatus != null && !syncStatus.isBlank()) {
+      from.append(" AND a.sync_status = ?");
+      args.add(syncStatus.trim().toUpperCase(Locale.ROOT));
+    }
+    Long total = jdbc.queryForObject("SELECT COUNT(*) " + from, Long.class, args.toArray());
+    String listSql = """
+        SELECT a.id, a.matricule, a.nom_complet, a.sexe, a.date_naissance, a.nationalite, a.relation,
+               a.code_famille, a.fk_titulaire, a.titulaire_ipp,
+               a.fk_societe, a.legacy_codesoc, soc.code AS societe_code, soc.designation AS societe_designation,
+               a.fk_contrat, a.legacy_contrat_code, ctr.code AS contrat_code, ctr.designation AS contrat_designation,
+               a.mediline_ipp, a.mediline_patient_id, a.patient_link_status,
+               a.assurance, a.covid, a.fk_location, a.legacy_location_code, loc.libelle AS location_libelle,
+               a.source_legacy, a.actif, a.source_system, a.legacy_code, a.sync_status, a.version,
+               a.last_synced_at, a.sync_fingerprint,
+               NULL AS titulaire_nom, NULL AS titulaire_matricule
+        """ + from + " ORDER BY a.nom_complet ASC, a.matricule ASC LIMIT ? OFFSET ?";
+    List<Object> listArgs = new ArrayList<>(args);
+    listArgs.add(clampLimit(limit));
+    listArgs.add(Math.max(offset, 0));
+    List<Map<String, Object>> items = jdbc.query(listSql, (rs, i) -> mapAyantDetail(rs), listArgs.toArray());
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", total == null ? 0L : total);
+    return result;
+  }
+
+  public Optional<Map<String, Object>> findSocieteDetail(long id) {
+    var list = jdbc.query(
+        """
+            SELECT s.id, s.code, s.designation, s.fk_contrat, c.code AS contrat_code, c.designation AS contrat_designation
+            FROM erp_societes s
+            LEFT JOIN erp_contrats c ON c.id = s.fk_contrat
+            WHERE s.id = ?
+            """,
+        (rs, i) -> {
+          Map<String, Object> m = new LinkedHashMap<>();
+          m.put("id", rs.getLong("id"));
+          m.put("code", rs.getString("code"));
+          m.put("designation", rs.getString("designation"));
+          m.put("contratId", rs.getObject("fk_contrat"));
+          m.put("contratCode", rs.getString("contrat_code"));
+          m.put("contratDesignation", rs.getString("contrat_designation"));
+          return m;
+        },
+        id);
+    return list.stream().findFirst();
+  }
+
+  public Optional<Map<String, Object>> findContratDetail(long id) {
+    var list = jdbc.query(
+        "SELECT id, code, designation FROM erp_contrats WHERE id = ?",
+        (rs, i) -> {
+          Map<String, Object> m = new LinkedHashMap<>();
+          m.put("id", rs.getLong("id"));
+          m.put("code", rs.getString("code"));
+          m.put("designation", rs.getString("designation"));
+          return m;
+        },
+        id);
+    return list.stream().findFirst();
+  }
+
+  public Optional<Map<String, Object>> findLocationDetail(long id) {
+    var list = jdbc.query(
+        "SELECT id, code, libelle FROM erp_locations WHERE id = ?",
+        (rs, i) -> {
+          Map<String, Object> m = new LinkedHashMap<>();
+          m.put("id", rs.getLong("id"));
+          m.put("code", rs.getString("code"));
+          m.put("libelle", rs.getString("libelle"));
+          return m;
+        },
+        id);
+    return list.stream().findFirst();
+  }
+
+  public void markAyantSynced(long id, String fingerprint) {
+    jdbc.update(
+        """
+            UPDATE erp_ayants_droit
+            SET sync_status = 'SYNCED', sync_fingerprint = COALESCE(?, sync_fingerprint),
+                last_synced_at = NOW(), dateupdate = NOW()
+            WHERE id = ?
+            """,
+        fingerprint,
+        id);
+  }
+
+  public void updateAyantSyncStatus(long id, String status) {
+    jdbc.update(
+        "UPDATE erp_ayants_droit SET sync_status = ?, dateupdate = NOW() WHERE id = ?",
+        status,
+        id);
+  }
+
+  public int setAyantActif(long id, boolean actif, int version, Long userId) {
+    return jdbc.update(
+        """
+            UPDATE erp_ayants_droit
+            SET actif = ?, version = version + 1, userupdateid = ?, dateupdate = NOW()
+            WHERE id = ? AND version = ?
+            """,
+        actif ? 1 : 0,
+        userId,
+        id,
+        version);
+  }
+
+  private Map<String, Object> mapAyantDetail(java.sql.ResultSet rs) throws java.sql.SQLException {
+    Map<String, Object> item = baseItem(rs, rs.getString("matricule"), rs.getString("nom_complet"));
+    item.put("matricule", rs.getString("matricule"));
+    item.put("nomComplet", rs.getString("nom_complet"));
+    item.put("sexe", rs.getString("sexe"));
+    Date dn = rs.getDate("date_naissance");
+    item.put("dateNaissance", dn == null ? null : dn.toLocalDate().toString());
+    item.put("nationalite", rs.getString("nationalite"));
+    item.put("relation", rs.getString("relation"));
+    item.put("codeFamille", rs.getString("code_famille"));
+    item.put("fkTitulaire", rs.getObject("fk_titulaire"));
+    item.put("titulaireIpp", rs.getString("titulaire_ipp"));
+    item.put("titulaireNom", rs.getString("titulaire_nom"));
+    item.put("titulaireMatricule", rs.getString("titulaire_matricule"));
+    item.put("societeId", rs.getObject("fk_societe"));
+    item.put("societeCode", rs.getString("societe_code"));
+    item.put("societeDesignation", rs.getString("societe_designation"));
+    item.put("contratId", rs.getObject("fk_contrat"));
+    item.put("contratCode", firstNonBlank(rs.getString("contrat_code"), rs.getString("legacy_contrat_code")));
+    item.put("contratDesignation", rs.getString("contrat_designation"));
+    item.put("medilineIpp", rs.getString("mediline_ipp"));
+    item.put("medilinePatientId", rs.getObject("mediline_patient_id"));
+    item.put("patientLinkStatus", rs.getString("patient_link_status"));
+    item.put("assurance", rs.getString("assurance"));
+    item.put("covid", rs.getString("covid"));
+    item.put("locationId", rs.getObject("fk_location"));
+    item.put("locationCode", rs.getString("legacy_location_code"));
+    item.put("locationLibelle", rs.getString("location_libelle"));
+    item.put("source", rs.getString("source_legacy"));
+    Map<String, Object> fields = new LinkedHashMap<>();
+    fields.put("MATRICULE", item.get("matricule"));
+    fields.put("NOM", item.get("nomComplet"));
+    fields.put("SEXE", item.get("sexe"));
+    fields.put("DATENAIS", item.get("dateNaissance"));
+    fields.put("NATIONALITE", item.get("nationalite"));
+    fields.put("RELATION", item.get("relation"));
+    fields.put("CODEFAM", item.get("codeFamille"));
+    fields.put("CODESOC", firstNonBlank(rs.getString("societe_code"), rs.getString("legacy_codesoc")));
+    fields.put("CONTRAT", item.get("contratCode"));
+    fields.put("SOURCE", item.get("source"));
+    fields.put("LOCATION", item.get("locationCode"));
+    fields.put("ASSURANCE", item.get("assurance"));
+    fields.put("COVID", item.get("covid"));
+    fields.put("medilineIpp", item.get("medilineIpp"));
+    item.put("fields", fields);
+    return item;
+  }
+
   public void upsertServiceFromImport(String code, String libelle, String fingerprint) {
     upsertSimple("erp_services", "libelle", code, libelle, fingerprint);
   }
