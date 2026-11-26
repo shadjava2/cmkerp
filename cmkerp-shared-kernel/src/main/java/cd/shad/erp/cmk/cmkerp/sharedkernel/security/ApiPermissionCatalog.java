@@ -153,7 +153,8 @@ public final class ApiPermissionCatalog {
     // Rebuild shared-kernel + gateway après toute modification (JAR fat embarque le kernel).
     rule("GET", "/api/v1/facturation/contrats/import/candidates",
         "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_DRY_RUN", "FACTURATION_SYNC_IMPORT");
-    rule("GET", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_VIEW", "SIDEBAR_FACTURATION_CONTRATS");
+    rule("GET", "/api/v1/facturation/contrats", "FACTURATION_CONTRATS_VIEW", "SIDEBAR_FACTURATION_CONTRATS",
+        "FACTURATION_AYANTSDROIT_VIEW", "FACTURATION_AYANTSDROIT_CREATE");
     rule("POST", "/api/v1/facturation/contrats/import/selected",
         "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/contrats/import/dry-run",
@@ -241,8 +242,11 @@ public final class ApiPermissionCatalog {
   private static void registerClinicReferentials() {
     referential("services", "FACTURATION_SERVICES", "SIDEBAR_FACTURATION_SERVICES", true);
     referential("imputations", "FACTURATION_IMPUTATIONS", "SIDEBAR_FACTURATION_IMPUTATIONS", true);
-    referential("locations", "FACTURATION_LOCATIONS", "SIDEBAR_FACTURATION_LOCATIONS", true);
-    referential("societes", "FACTURATION_SOCIETES", "SIDEBAR_FACTURATION_SOCIETES", true);
+    // Lecture pour sélecteurs Ayants droit (sans exiger MODULE / menu Locations|Sociétés).
+    referential("locations", "FACTURATION_LOCATIONS", "SIDEBAR_FACTURATION_LOCATIONS", true,
+        "FACTURATION_AYANTSDROIT_VIEW", "FACTURATION_AYANTSDROIT_CREATE");
+    referential("societes", "FACTURATION_SOCIETES", "SIDEBAR_FACTURATION_SOCIETES", true,
+        "FACTURATION_AYANTSDROIT_VIEW", "FACTURATION_AYANTSDROIT_CREATE");
     referential("classes", "FACTURATION_CLASSES", "SIDEBAR_FACTURATION_CLASSES", true);
     referential("tarifs", "FACTURATION_TARIFS", "SIDEBAR_FACTURATION_TARIFS", true);
     referential("medecins", "FACTURATION_MEDECINS", "SIDEBAR_FACTURATION_MEDECINS", true);
@@ -255,14 +259,19 @@ public final class ApiPermissionCatalog {
     referential("medicaments", "FACTURATION_MEDICAMENTS", "SIDEBAR_FACTURATION_MEDICAMENTS", false);
   }
 
-  private static void referential(String key, String prefix, String sidebar, boolean mutable) {
+  private static void referential(String key, String prefix, String sidebar, boolean mutable,
+      String... extraViewAnyOf) {
     String base = "/api/v1/facturation/referentials/" + key;
     String view = prefix + "_VIEW";
     String importPerm = prefix + "_IMPORT";
     String status = prefix + "_STATUS_UPDATE";
     rule("GET", base + "/import/candidates", importPerm, "FACTURATION_SYNC_DRY_RUN", "FACTURATION_SYNC_IMPORT");
     rule("GET", base + "/erp-sites", view, prefix + "_UPDATE", prefix + "_CREATE");
-    rule("GET", base, view, sidebar);
+    String[] getAnyOf = new String[2 + extraViewAnyOf.length];
+    getAnyOf[0] = view;
+    getAnyOf[1] = sidebar;
+    System.arraycopy(extraViewAnyOf, 0, getAnyOf, 2, extraViewAnyOf.length);
+    rule("GET", base, getAnyOf);
     rule("POST", base + "/import/selected", importPerm, "FACTURATION_SYNC_IMPORT");
     rule("POST", base + "/import/dry-run", importPerm, "FACTURATION_SYNC_DRY_RUN");
     rule("POST", base + "/import", importPerm, "FACTURATION_SYNC_IMPORT");

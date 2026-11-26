@@ -64,7 +64,8 @@ public class ClinicReferentialService {
 
   public Map<String, Object> list(String key, String q, Boolean actif, int page, int size) {
     Definition def = require(key);
-    int safeSize = Math.min(Math.max(size, 1), 200);
+    // Sélecteurs formulaire (sociétés…) : jusqu'à 1000 actifs ; au-delà → recherche serveur.
+    int safeSize = Math.min(Math.max(size, 1), 1000);
     int safePage = Math.max(page, 0);
     // Lecture prioritaire des tables métier normalisées (libellés FK) lorsque disponibles.
     if (relationalStore.supports(def.code())) {

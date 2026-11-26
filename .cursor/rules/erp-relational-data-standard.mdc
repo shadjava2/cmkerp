@@ -16,7 +16,11 @@ CMK ERP possède son **propre modèle métier relationnel**. CLINIQUE est un sys
 5. **Index** sur FK, codes, recherche (nom, matricule…).
 6. **Montants** = `DECIMAL` / `BigDecimal` — jamais FLOAT/DOUBLE.
 7. **API** = id + code + **libellé métier** résolus côté serveur (pas de N+1 navigateur).
-8. **Formulaires** = sélecteurs (ComboBox / async / dialog) — pas de saisie libre de clés étrangères.
+8. **Formulaires** = sélecteurs adaptés au volume — pas de saisie libre de clés étrangères.
+   - Petit référentiel → ComboBox simple.
+   - Référentiel important → `ErpSearchableCombobox` (recherche intégrée, un seul champ).
+   - Référentiel complexe → Picker avancé (`PatientPicker`, etc.).
+   - **Interdit** : champ de recherche + `<select>` natif pour la même FK.
 9. **Référentiels existants** (utilisateurs, pharmacies, produits, sites) = **mapping**, pas de duplication.
 10. **Relations orphelines** = consultables + signalées — jamais inventées.
 11. **Réplication** = résolution des codes historiques **côté serveur** uniquement.

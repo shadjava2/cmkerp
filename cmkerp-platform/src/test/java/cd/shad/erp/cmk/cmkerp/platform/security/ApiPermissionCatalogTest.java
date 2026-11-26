@@ -46,6 +46,16 @@ class ApiPermissionCatalogTest {
   }
 
   @Test
+  void ayantsFormCanReadSocietesLocationsContrats() {
+    var locations = ApiPermissionCatalog.match("GET", "/api/v1/facturation/referentials/locations").orElseThrow();
+    assertTrue(java.util.Arrays.asList(locations.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_CREATE"));
+    var societes = ApiPermissionCatalog.match("GET", "/api/v1/facturation/referentials/societes").orElseThrow();
+    assertTrue(java.util.Arrays.asList(societes.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_VIEW"));
+    var contrats = ApiPermissionCatalog.match("GET", "/api/v1/facturation/contrats").orElseThrow();
+    assertTrue(java.util.Arrays.asList(contrats.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_CREATE"));
+  }
+
+  @Test
   void patientSearchAllowsFacturationAyantsWithoutModuleDmi() {
     var rule = ApiPermissionCatalog.match("POST", "/api/v1/cardex/patients/recherche").orElseThrow();
     assertTrue(java.util.Arrays.asList(rule.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_VIEW"));
