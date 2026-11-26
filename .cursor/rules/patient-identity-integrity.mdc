@@ -1,0 +1,29 @@
+---
+description: Intégrité de l'identité patient — détection des doublons obligatoire à la création
+alwaysApply: true
+---
+
+# PATIENT IDENTITY INTEGRITY — MANDATORY
+
+Toute création d’un dossier patient dans CMK ERP doit garantir **un patient physique, une identité médicale, un IPP de référence**.
+
+## Principes non négociables
+
+1. **Détection intelligente des doublons** avant toute écriture Mediline (similarité multicritère, pas uniquement `LIKE`).
+2. **Validation serveur obligatoire** dans l’orchestrateur de création (`PatientRegistrationOrchestrator`) — le frontend ne suffit jamais.
+3. **Aucune fusion automatique** de dossiers, même à 100 % de similarité.
+4. **Traçabilité** des décisions (accusé de patient distinct, justification, fingerprint, utilisateur, horodatage).
+5. **Libellés métier** dans le récapitulatif (sexe, relation, contrat, catégorie, compte) — jamais d’IDs internes comme seuls libellés.
+6. **Messages d’erreur précis** (société non associée, compte introuvable, catégorie invalide, Mediline indisponible) — jamais un libellé générique trompeur.
+7. Une indisponibilité Mediline **n’équivaut pas** à « aucun doublon ».
+
+## Parcours conforme
+
+Identité → Prise en charge → Confirmation (récap + doublons + contrôles) → Création Mediline → Affiliation ERP → Outbox CLINIQUE.
+
+## Interdit
+
+- Créer un patient sans analyse de doublons (ou sans refus explicite si l’analyse est indisponible).
+- Contourner `DMI_PATIENT_DUPLICATE_OVERRIDE` pour forcer une création malgré une correspondance forte.
+- Modifier le schéma Mediline pour cette détection.
+- Écraser un dossier existant avec les données du formulaire abandonné.

@@ -2741,6 +2741,44 @@ public class ErpFacturationRelationalStore {
         requestId);
   }
 
+  /** Inscriptions ERP non finalisées (créations concurrentes / interrompues). */
+  public List<Map<String, Object>> findPendingPatientRegistrations(int limit) {
+    int safe = Math.max(1, Math.min(limit, 200));
+    return jdbc.query(
+        """
+            SELECT id, request_id, mediline_ipp, mediline_status, ayant_id, ayant_status,
+                   societe_id, contrat_id, payload_json, last_error, datecreate, dateupdate
+            FROM erp_patient_registration
+            WHERE mediline_status IN ('PENDING', 'FAILED')
+               OR (mediline_status = 'CREATED' AND ayant_status IN ('PENDING', 'FAILED'))
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+        (rs, i) -> mapPatientRegistration(rs),
+        safe);
+  }
+
+  public void insertPatientDuplicateDecision(
+      String requestId,
+      String fingerprint,
+      String decision,
+      String justification,
+      String candidatesJson,
+      Long userId) {
+    jdbc.update(
+        """
+            INSERT INTO erp_patient_duplicate_decision
+              (request_id, fingerprint, decision, justification, candidates_json, usercreateid)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+        requestId,
+        fingerprint,
+        decision,
+        justification,
+        candidatesJson,
+        userId);
+  }
+
   private static Map<String, Object> mapPatientRegistration(java.sql.ResultSet rs) throws java.sql.SQLException {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("id", rs.getLong("id"));

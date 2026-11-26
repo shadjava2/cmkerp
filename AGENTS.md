@@ -1,4 +1,4 @@
-﻿# AGENTS.md — CMK ERP
+# AGENTS.md — CMK ERP
 
 ## Huit standards architecturaux permanents
 
@@ -12,6 +12,7 @@
 | Bidirectional Synchronization | `.cursor/rules/clinic-bidirectional-sync.mdc` | Outbox, réplication, rapprochement |
 | ERP Relational Data | `.cursor/rules/erp-relational-data-standard.mdc` | Tables métier, FK, libellés, sélecteurs |
 | Recherche patient unifiée | `.cursor/rules/unified-patient-search.mdc` | Moteur Mediline commun DMI / Facturation / ERP |
+| Intégrité identité patient | `.cursor/rules/patient-identity-integrity.mdc` | Anti-doublons, validation serveur, traçabilité des décisions |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
 
@@ -22,6 +23,8 @@ CMK ERP est **une seule application**, plusieurs espaces métier. On change de m
 **Recherche patient** : un seul moteur Mediline (`buildPatientQuickSearchCriteria` + `POST /api/v1/cardex/patients/recherche` + `PatientSearchPanel` / `PatientPicker`). Modes NAVIGATION (DMI) et SELECTION (formulaires ERP). Interdit de dupliquer la logique de recherche.
 
 **Chantier 02 (DMI × Facturation)** : création dossier + affiliation via `POST /api/v1/dmi/registrations` et registre `erp_patient_registration` ; sociétés ERP reliées aux comptes Mediline (`V36`, `AffiliationEditor`, `docs/integration/CHANTIER02_DMI_FACTURATION_INTEGRATION_REPORT.md`). Mapping société obligatoire pour une affiliation ; reprise idempotente par `request_id`.
+
+**Intégrité identité patient** : toute création de dossier passe par `PatientDuplicateDetectionService` (similarité multicritère + fingerprint), récapitulatif métier, contrôles administratifs précis et validation serveur avant écriture Mediline. Permission distincte `DMI_PATIENT_DUPLICATE_OVERRIDE` pour continuer malgré une correspondance forte. Aucune fusion automatique.
 
 **Sélecteurs FK** : petit référentiel → ComboBox ; volume moyen → `ErpSearchableCombobox` ; complexe → Picker. Interdit : input de recherche + `<select>` pour la même clé étrangère.
 
@@ -120,5 +123,4 @@ Livrer sans couverture RBAC = violation du standard architectural.
 ### Contrôle CI bloquant
 
 `cmkerp/scripts/rbac-compliance-check.sh` doit rester vert. Toute livraison sans couverture RBAC complète est rejetée.
-
 

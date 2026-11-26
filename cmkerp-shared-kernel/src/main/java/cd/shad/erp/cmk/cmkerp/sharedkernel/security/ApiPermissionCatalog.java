@@ -99,6 +99,14 @@ public final class ApiPermissionCatalog {
         "DMI_CABINET_REGISTRE_CONSULTATIONS_VIEW");
     rule("POST", "/api/v1/cardex", "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER",
         "DMI_CARDEX_NOUVEAU_DOSSIER");
+    rule("POST", "/api/v1/dmi/registrations/duplicates",
+        "DMI_PATIENT_DUPLICATE_DETECT",
+        "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER");
+    rule("POST", "/api/v1/dmi/registrations/preflight",
+        "DMI_PATIENT_DUPLICATE_DETECT",
+        "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER",
+        "FACTURATION_AYANTSDROIT_CREATE");
+    // Préfixe plus long déclaré avant /registrations pour le matching longest-prefix.
     rule("POST", "/api/v1/dmi/registrations",
         "DMI_RECEPTION_PATIENT_CREATE", "DMI_ACCUEIL_NOUVEAU_DOSSIER",
         "DMI_CARDEX_NOUVEAU_DOSSIER", "FACTURATION_AYANTSDROIT_CREATE");

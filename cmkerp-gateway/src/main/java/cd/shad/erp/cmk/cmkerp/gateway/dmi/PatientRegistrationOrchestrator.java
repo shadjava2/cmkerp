@@ -14,6 +14,7 @@ import cd.shad.erp.cmk.cmkerp.gateway.facturation.AffiliationCoverageService;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ErpAyantService;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ErpFacturationRelationalStore;
 import cd.shad.erp.cmk.cmkerp.gateway.mediline.MedilinePatientWriteService;
+import cd.shad.erp.cmk.cmkerp.gateway.mediline.PatientDuplicateDetectionService;
 
 @Service
 public class PatientRegistrationOrchestrator {
@@ -24,6 +25,7 @@ public class PatientRegistrationOrchestrator {
   private final ErpAyantService ayantService;
   private final AffiliationCoverageService coverageService;
   private final MedilinePatientWriteService medilineWrite;
+  private final PatientDuplicateDetectionService duplicateDetection;
   private final ObjectMapper objectMapper;
 
   public PatientRegistrationOrchestrator(
@@ -31,16 +33,18 @@ public class PatientRegistrationOrchestrator {
       ErpAyantService ayantService,
       AffiliationCoverageService coverageService,
       MedilinePatientWriteService medilineWrite,
+      PatientDuplicateDetectionService duplicateDetection,
       ObjectMapper objectMapper) {
     this.store = store;
     this.ayantService = ayantService;
     this.coverageService = coverageService;
     this.medilineWrite = medilineWrite;
+    this.duplicateDetection = duplicateDetection;
     this.objectMapper = objectMapper;
   }
 
   @Transactional
-  public Map<String, Object> register(String actor, Long userId, Map<String, Object> body) {
+  public Map<String, Object> register(String actor, Long userId, Map<String, Object> body, boolean canOverride) {
     String requestIdRaw = str(body.get("requestId"));
     if (requestIdRaw == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Identifiant de requête obligatoire.");
@@ -86,6 +90,31 @@ public class PatientRegistrationOrchestrator {
     Map<String, Object> coverage = null;
     if (!skipAyant) {
       coverage = coverageService.requireValid(affiliation);
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> duplicateDecision = body.get("duplicateDecision") instanceof Map<?, ?> m
+        ? (Map<String, Object>) m
+        : null;
+
+    Map<String, Object> duplicateAnalysis = null;
+    if (!"CREATED".equalsIgnoreCase(medilineStatus)) {
+      duplicateAnalysis = duplicateDetection.assertCreationAllowed(
+          identity, requestId.toString(), duplicateDecision, canOverride);
+      if (duplicateDecision != null
+          && "ACKNOWLEDGE_DISTINCT".equalsIgnoreCase(str(duplicateDecision.get("decision")))) {
+        try {
+          store.insertPatientDuplicateDecision(
+              requestId.toString(),
+              str(duplicateDecision.get("fingerprint")),
+              str(duplicateDecision.get("decision")),
+              str(duplicateDecision.get("justification")),
+              objectMapper.writeValueAsString(duplicateAnalysis.get("candidates")),
+              userId);
+        } catch (Exception ex) {
+          log.warn("Audit décision doublon non persisté: {}", ex.getMessage());
+        }
+      }
     }
 
     if (!"CREATED".equalsIgnoreCase(medilineStatus)) {
@@ -146,6 +175,12 @@ public class PatientRegistrationOrchestrator {
             : "SKIPPED".equalsIgnoreCase(ayantStatus)
                 ? "Dossier patient enregistré."
                 : "Dossier patient enregistré — affiliation en cours de finalisation.");
+    result.put("dossierCreated", "CREATED".equalsIgnoreCase(medilineStatus));
+    result.put("affiliationCreated", "CREATED".equalsIgnoreCase(ayantStatus));
+    result.put("affiliationSkipped", "SKIPPED".equalsIgnoreCase(ayantStatus));
+    if (duplicateAnalysis != null) {
+      result.put("duplicateMaxScore", duplicateAnalysis.get("maxScore"));
+    }
     return result;
   }
 

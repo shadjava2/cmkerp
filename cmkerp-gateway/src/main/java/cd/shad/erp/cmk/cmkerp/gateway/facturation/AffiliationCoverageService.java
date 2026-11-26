@@ -78,7 +78,9 @@ public class AffiliationCoverageService {
     }
 
     if (societe != null && !store.societeMedilineMappingReady(societeId)) {
-      errors.add("La société sélectionnée n’est pas reliée à un compte Mediline.");
+      errors.add(
+          "SOCIETE_MEDILINE_UNMAPPED: La société n’est pas associée à un compte Mediline. "
+              + "Corrigez le rapprochement Société — Compte Mediline.");
     }
 
     if (!AffiliationCoverageCalculator.isPrincipal(relation)) {
@@ -112,32 +114,60 @@ public class AffiliationCoverageService {
 
     if (contrat != null) {
       if (libelleBeneficiaire == null) {
-        errors.add("Le libellé bénéficiaire du contrat n’est pas configuré.");
+        errors.add(
+            "CATEGORIE_BENEFICIAIRE_ABSENTE: Le libellé bénéficiaire du contrat n’est pas configuré. "
+                + "Corrigez le contrat en Facturation.");
       }
       if (categorieCode == null) {
-        errors.add("La catégorie Mediline du contrat n’est pas configurée.");
+        errors.add(
+            "CATEGORIE_CODE_ABSENT: Le code catégorie Mediline du contrat n’est pas configuré. "
+                + "Corrigez le contrat en Facturation.");
+      } else if ("-1".equals(categorieCode)) {
+        errors.add(
+            "CATEGORIE_CODE_INVALIDE: Le code catégorie Mediline du contrat est invalide. "
+                + "Corrigez le contrat en Facturation.");
       } else {
         categorieIntitule = resolveCategorieIntitule(categorieCode).orElse(null);
         if (categorieIntitule == null && medilineJdbc != null) {
-          errors.add("La catégorie Mediline « " + categorieCode + " » est introuvable.");
+          errors.add(
+              "CATEGORIE_MEDILINE_INTROUVABLE: La catégorie Mediline « "
+                  + categorieCode
+                  + " » est introuvable. Vérifiez le code sur le contrat.");
+        } else if (medilineJdbc == null) {
+          errors.add(
+              "MEDILINE_UNAVAILABLE: Impossible de vérifier la catégorie Mediline (service indisponible).");
         }
       }
     }
 
     String compteCode = societeId == null ? null : store.medilineCompteCodeForSociete(societeId).orElse(null);
+    String compteIntitule = null;
     String compteCategorie = null;
+    if (compteCode == null && societe != null && store.societeMedilineMappingReady(societeId)) {
+      errors.add("COMPTE_MEDILINE_ABSENT: Compte Mediline manquant pour la société sélectionnée.");
+    }
     if (compteCode != null && medilineJdbc != null) {
-      compteCategorie = loadCompteCategorie(compteCode).orElse(null);
-      if (categorieCode != null && compteCategorie != null
-          && !categorieCode.equalsIgnoreCase(compteCategorie.trim())) {
+      var compteRow = loadCompte(compteCode);
+      if (compteRow.isEmpty()) {
         errors.add(
-            "Divergence catégorie : le contrat impose « "
-                + categorieCode
-                + " » alors que le compte Mediline « "
+            "COMPTE_MEDILINE_INTROUVABLE: Le compte Mediline « "
                 + compteCode
-                + " » attend « "
-                + compteCategorie.trim()
-                + " ». Corrigez la correspondance ERP.");
+                + " » n’existe pas. Vérifiez l’association société → compte.");
+      } else {
+        compteIntitule = str(compteRow.get().get("intitule"));
+        compteCategorie = str(compteRow.get().get("categorie"));
+        if (categorieCode != null
+            && compteCategorie != null
+            && !categorieCode.equalsIgnoreCase(compteCategorie.trim())) {
+          errors.add(
+              "CATEGORIE_COMPTE_INCOHERENT: Le contrat impose la catégorie « "
+                  + categorieCode
+                  + " » alors que le compte Mediline « "
+                  + compteCode
+                  + " » attend « "
+                  + compteCategorie.trim()
+                  + " ». Corrigez la correspondance ERP.");
+        }
       }
     }
 
@@ -159,6 +189,7 @@ public class AffiliationCoverageService {
     result.put("medilineCategorieCode", categorieCode);
     result.put("medilineCategorieIntitule", categorieIntitule);
     result.put("compteCode", compteCode);
+    result.put("compteIntitule", compteIntitule);
     result.put("compteCategoriePatient", compteCategorie);
     result.put("complete", errors.isEmpty());
     result.put("errors", errors);
@@ -225,15 +256,22 @@ public class AffiliationCoverageService {
     }
   }
 
-  private Optional<String> loadCompteCategorie(String compteCode) {
+  private Optional<Map<String, Object>> loadCompte(String compteCode) {
     try {
-      List<String> rows = medilineJdbc.query(
+      List<Map<String, Object>> rows = medilineJdbc.query(
           """
-              SELECT CATEGORIE_PATIENT FROM t_compte WHERE CODE = ? LIMIT 1
+              SELECT CODE AS code, INTITULE AS intitule, CATEGORIE_PATIENT AS categorie
+              FROM t_compte WHERE CODE = ? LIMIT 1
               """,
-          (rs, i) -> rs.getString(1),
+          (rs, i) -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("code", trim(rs.getString("code")));
+            row.put("intitule", trim(rs.getString("intitule")));
+            row.put("categorie", trim(rs.getString("categorie")));
+            return row;
+          },
           compteCode);
-      return rows.stream().findFirst().map(s -> s == null ? null : s.trim()).filter(s -> s != null && !s.isEmpty());
+      return rows.stream().findFirst();
     } catch (Exception ex) {
       return Optional.empty();
     }

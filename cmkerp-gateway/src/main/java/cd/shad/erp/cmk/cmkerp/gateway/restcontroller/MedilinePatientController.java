@@ -376,10 +376,22 @@ public class MedilinePatientController {
 
   private static void validateReference(NamedParameterJdbcTemplate jdbc, String table, String code) {
     if (code == null) return;
+    if ("t_categorie_patient".equals(table) && "-1".equals(code)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Code catégorie Mediline invalide (« -1 »). Configurez la catégorie bénéficiaire du contrat.");
+    }
     var ids = jdbc.queryForList("SELECT CODE FROM " + table + " WHERE CODE = :code",
         new MapSqlParameterSource("code", code), String.class);
-    if (ids.isEmpty() || "-1".equals(code) && "t_categorie_patient".equals(table)) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Catégorie ou compte inconnu.");
+    if (ids.isEmpty()) {
+      if ("t_categorie_patient".equals(table)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "La catégorie Mediline « " + code + " » est introuvable. Vérifiez la configuration du contrat.");
+      }
+      if ("t_compte".equals(table)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Le compte Mediline « " + code + " » est introuvable. Vérifiez l’association société → compte.");
+      }
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Référentiel Mediline introuvable : " + code);
     }
   }
 

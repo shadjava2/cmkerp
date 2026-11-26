@@ -32,6 +32,11 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Sociétés | `SIDEBAR_FACTURATION_SOCIETES` + `FACTURATION_SOCIETES_*` | `MODULE_FACTURATION` | OK — référentiel + mapping Mediline |
 | Correspondances société ↔ compte Mediline | `FACTURATION_SOCIETES_VIEW` / `FACTURATION_SOCIETES_UPDATE` | `SIDEBAR_FACTURATION_SOCIETES` | OK — `GET/PUT /api/v1/facturation/mappings/societe-comptes`, lookup `t_compte` |
 | Enregistrement dossier + affiliation (Chantier 02) | `DMI_ACCUEIL_NOUVEAU_DOSSIER` / `DMI_CARDEX_NOUVEAU_DOSSIER` / `DMI_RECEPTION_PATIENT_CREATE` (+ `FACTURATION_AYANTSDROIT_CREATE` pour l’ayant) | DMI + Facturation | OK — `POST /api/v1/dmi/registrations` |
+| Détection doublons patients | `DMI_PATIENT_DUPLICATE_DETECT` (+ droits création dossier) | DMI | OK — `POST /api/v1/dmi/registrations/duplicates` + `/preflight` |
+| Comparer identités doublon | `DMI_PATIENT_DUPLICATE_COMPARE` | DMI | OK — UI Comparer |
+| Utiliser dossier existant | `DMI_PATIENT_DUPLICATE_USE_EXISTING` | DMI | OK — action Cardex |
+| Continuer malgré doublon fort | `DMI_PATIENT_DUPLICATE_OVERRIDE` | DMI | OK — justification + audit `erp_patient_duplicate_decision` |
+| Audit décisions anti-doublons | `DMI_PATIENT_DUPLICATE_AUDIT_VIEW` | DMI | OK — permission catalogue |
 | Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
 | Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` | `MODULE_FACTURATION` | OK |
 | Actions ventes médicaments | `STOCK_VENTE_VIEW` / `STOCK_VENTE_CREATE` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
