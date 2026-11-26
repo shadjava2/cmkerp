@@ -44,6 +44,7 @@ import jakarta.servlet.http.HttpServletRequest;
 public class FacturationRelationalController {
 
   private final ErpFacturationRelationalStore store;
+  private final SocieteMedilineMappingService societeMedilineMappingService;
   private final JwtTokenProvider jwtTokenProvider;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
@@ -52,12 +53,14 @@ public class FacturationRelationalController {
 
   public FacturationRelationalController(
       ErpFacturationRelationalStore store,
+      SocieteMedilineMappingService societeMedilineMappingService,
       JwtTokenProvider jwtTokenProvider,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
       FacturationDataConsolidationService consolidation,
       @Autowired(required = false) @Qualifier("medilineJdbcTemplate") JdbcTemplate medilineJdbc) {
     this.store = store;
+    this.societeMedilineMappingService = societeMedilineMappingService;
     this.jwtTokenProvider = jwtTokenProvider;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
@@ -347,22 +350,10 @@ public class FacturationRelationalController {
     String compteIntitule = body.get("medilineCompteIntitule") == null
         ? null
         : String.valueOf(body.get("medilineCompteIntitule"));
-  if (body.get("clear") != null && Boolean.parseBoolean(String.valueOf(body.get("clear")))) {
-      int updated = store.clearSocieteMedilineCompte(societeId);
-      if (updated == 0) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.");
-      }
-      return ResponseEntity.ok(Map.of("societeId", societeId, "medilineMappingStatus", "UNMATCHED"));
+    if (body.get("clear") != null && Boolean.parseBoolean(String.valueOf(body.get("clear")))) {
+      return ResponseEntity.ok(societeMedilineMappingService.clear(societeId));
     }
-    if (compteCode == null || compteCode.isBlank()) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Compte Mediline obligatoire.");
-    }
-    int updated = store.bindSocieteMedilineCompte(societeId, compteCode, compteIntitule, userId);
-    if (updated == 0) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.");
-    }
-    return ResponseEntity.ok(store.findSocieteMedilineMapping(societeId)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Société introuvable.")));
+    return ResponseEntity.ok(societeMedilineMappingService.bind(societeId, compteCode, compteIntitule, userId));
   }
 
   @GetMapping("/lookups/mediline-comptes")
