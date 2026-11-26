@@ -123,6 +123,51 @@ public class MedilinePatientWriteService {
     }
   }
 
+  /**
+   * Met à jour PEC / catégorie / compte Mediline après changement d'affiliation.
+   * Ne touche pas aux autres champs d'identité.
+   */
+  public void updateCoverage(String ipp, String pec, String categorieCode, String compteCode) {
+    if (ipp == null || ipp.isBlank()) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "IPP obligatoire.");
+    }
+    var jdbc = requireMediline();
+    var transaction = medilineWriteTransaction.getIfAvailable();
+    if (transaction == null) {
+      throw unavailable();
+    }
+    Map<String, String> fields = new LinkedHashMap<>();
+    if (hasValue(pec)) {
+      fields.put("pec", pec);
+    }
+    if (hasValue(categorieCode)) {
+      fields.put("categorieCode", categorieCode);
+    }
+    if (hasValue(compteCode)) {
+      fields.put("compteCode", compteCode);
+    }
+    if (fields.isEmpty()) {
+      return;
+    }
+    var params = new MapSqlParameterSource("ipp", ipp.trim());
+    bindPatientFields(jdbc, fields, params);
+    StringBuilder set = new StringBuilder();
+    int idx = 0;
+    for (String key : fields.keySet()) {
+      var field = PATIENT_FIELDS.get(key);
+      if (idx++ > 0) {
+        set.append(", ");
+      }
+      set.append(field.column()).append(" = :field_").append(key);
+    }
+    String sql = "UPDATE t_personne SET " + set + " WHERE CODE = :ipp AND PERSONNE_PHYSIQUE = 1";
+    Integer updated = transaction.execute(status -> jdbc.update(sql, params));
+    if (updated == null || updated < 1) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Patient Mediline introuvable.");
+    }
+    log.info("Couverture Mediline actualisée pour {}", ipp);
+  }
+
   private NamedParameterJdbcTemplate requireMediline() {
     var jdbc = mediline.getIfAvailable();
     if (jdbc == null) {

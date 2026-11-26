@@ -489,12 +489,17 @@ public class ErpFacturationRelationalStore {
 
   public Optional<Map<String, Object>> findContratDetail(long id) {
     var list = jdbc.query(
-        "SELECT id, code, designation FROM erp_contrats WHERE id = ?",
+        """
+            SELECT id, code, designation, libelle_beneficiaire, mediline_categorie_code
+            FROM erp_contrats WHERE id = ?
+            """,
         (rs, i) -> {
           Map<String, Object> m = new LinkedHashMap<>();
           m.put("id", rs.getLong("id"));
           m.put("code", rs.getString("code"));
           m.put("designation", rs.getString("designation"));
+          m.put("libelleBeneficiaire", rs.getString("libelle_beneficiaire"));
+          m.put("medilineCategorieCode", rs.getString("mediline_categorie_code"));
           return m;
         },
         id);
@@ -1000,7 +1005,7 @@ public class ErpFacturationRelationalStore {
   public List<Map<String, Object>> listActiveContratsForPicker() {
     return jdbc.query(
         """
-            SELECT id, code, designation, actif
+            SELECT id, code, designation, libelle_beneficiaire, mediline_categorie_code, actif
             FROM erp_contrats
             WHERE actif = 1
             ORDER BY code ASC
@@ -1011,6 +1016,8 @@ public class ErpFacturationRelationalStore {
           row.put("id", rs.getLong("id"));
           row.put("code", rs.getString("code"));
           row.put("designation", rs.getString("designation"));
+          row.put("libelleBeneficiaire", rs.getString("libelle_beneficiaire"));
+          row.put("medilineCategorieCode", rs.getString("mediline_categorie_code"));
           row.put("actif", rs.getBoolean("actif"));
           return row;
         });

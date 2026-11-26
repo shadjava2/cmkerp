@@ -41,6 +41,8 @@ public class ErpAyantService {
 
   private final ErpFacturationRelationalStore store;
   private final ClinicReferentialRepository referentialRepository;
+  private final AffiliationCoverageService coverageService;
+  private final ObjectProvider<cd.shad.erp.cmk.cmkerp.gateway.mediline.MedilinePatientWriteService> medilineWrite;
   private final ClinicLegacyWriteGuard writeGuard;
   private final ObjectMapper objectMapper;
   private final ObjectProvider<ClinicBeachOutboxWorker> outboxWorker;
@@ -48,14 +50,22 @@ public class ErpAyantService {
   public ErpAyantService(
       ErpFacturationRelationalStore store,
       ClinicReferentialRepository referentialRepository,
+      AffiliationCoverageService coverageService,
+      ObjectProvider<cd.shad.erp.cmk.cmkerp.gateway.mediline.MedilinePatientWriteService> medilineWrite,
       ClinicLegacyWriteGuard writeGuard,
       ObjectMapper objectMapper,
       ObjectProvider<ClinicBeachOutboxWorker> outboxWorker) {
     this.store = store;
     this.referentialRepository = referentialRepository;
+    this.coverageService = coverageService;
+    this.medilineWrite = medilineWrite;
     this.writeGuard = writeGuard;
     this.objectMapper = objectMapper;
     this.outboxWorker = outboxWorker;
+  }
+
+  public Map<String, Object> previewCoverage(Map<String, Object> body) {
+    return coverageService.preview(body);
   }
 
   public Map<String, Object> list(
@@ -157,6 +167,7 @@ public class ErpAyantService {
     var location = store.findLocationDetail(locationId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Location introuvable."));
 
+    Map<String, Object> coverage = coverageService.requireValid(body);
     HolderResolution holder = resolveHolder(relation, matricule, body);
     String assurance = yn(body.get("assurance"), "N");
     String covid = yn(body.get("covid"), "N");
@@ -199,6 +210,7 @@ public class ErpAyantService {
         assurance, covid);
     enqueue(id, matricule, beachFields, "INSERT");
     scheduleOutboxFlushAfterCommit();
+    applyMedilineCoverage(medilineIpp, coverage);
     return get(id);
   }
 
@@ -225,6 +237,7 @@ public class ErpAyantService {
       body = new LinkedHashMap<>(body);
       body.put("medilineIpp", current.get("medilineIpp"));
     }
+    Map<String, Object> coverage = coverageService.requireValid(body);
     HolderResolution holder = resolveHolder(relation, matricule, body);
     String nomComplet = firstNonBlank(str(body.get("nomComplet")), str(current.get("nomComplet")));
     String sexe = normalizeSexe(firstNonBlank(str(body.get("sexe")), str(current.get("sexe"))));
@@ -281,7 +294,31 @@ public class ErpAyantService {
       enqueue(id, matricule, beachFields, op);
       scheduleOutboxFlushAfterCommit();
     }
+    applyMedilineCoverage(str(current.get("medilineIpp")), coverage);
     return get(id);
+  }
+
+  private void applyMedilineCoverage(String ipp, Map<String, Object> coverage) {
+    if (ipp == null || coverage == null) {
+      return;
+    }
+    var writer = medilineWrite.getIfAvailable();
+    if (writer == null) {
+      return;
+    }
+    try {
+      writer.updateCoverage(
+          ipp,
+          str(coverage.get("pec")),
+          str(coverage.get("medilineCategorieCode")),
+          str(coverage.get("compteCode")));
+    } catch (ResponseStatusException ex) {
+      throw ex;
+    } catch (RuntimeException ex) {
+      log.warn("Actualisation couverture Mediline {} : {}", ipp, ex.getMessage());
+      throw new ResponseStatusException(
+          HttpStatus.BAD_GATEWAY, "Affiliation enregistrée mais Mediline n’a pas pu être actualisé.");
+    }
   }
 
   @Transactional

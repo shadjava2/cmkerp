@@ -75,6 +75,16 @@ public class ErpContratService {
    */
   @Transactional
   public ErpContratRecord create(String code, String designation, Long userId) {
+    return create(code, designation, null, null, userId);
+  }
+
+  @Transactional
+  public ErpContratRecord create(
+      String code,
+      String designation,
+      String libelleBeneficiaire,
+      String medilineCategorieCode,
+      Long userId) {
     String normalized = ErpContratRepository.normalizeCode(code);
     if (normalized == null || normalized.isBlank()) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Code contrat obligatoire");
@@ -83,8 +93,11 @@ public class ErpContratService {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Code contrat déjà existant: " + normalized);
     }
     // Intention toujours journalisée (SUSPENDED si écriture TCONTRAT off).
+    // Classification ERP (libellé bénéficiaire / catégorie Mediline) : hors TCONTRAT.
     String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
-    long id = repository.insert(normalized, designation, true, "OPERATION_ERP", null, syncStatus, userId);
+    long id = repository.insert(
+        normalized, designation, libelleBeneficiaire, medilineCategorieCode,
+        true, "OPERATION_ERP", null, syncStatus, userId);
     repository.updateFingerprint(id, ClinicContratFingerprint.of(normalized, designation));
     enqueueReplication(id, normalized, designation, "INSERT", userId);
     scheduleOutboxFlushAfterCommit();
@@ -93,24 +106,55 @@ public class ErpContratService {
 
   /**
    * Mise à jour ERP + intention outbox atomiques MySQL ; flush Beach après commit uniquement.
+   * La classification bénéficiaire reste locale ERP (pas de réplication TCONTRAT).
    */
   @Transactional
   public ErpContratRecord update(long id, String designation, int version, Long userId) {
+    return update(id, designation, null, null, version, userId, false);
+  }
+
+  @Transactional
+  public ErpContratRecord update(
+      long id,
+      String designation,
+      String libelleBeneficiaire,
+      String medilineCategorieCode,
+      int version,
+      Long userId) {
+    return update(id, designation, libelleBeneficiaire, medilineCategorieCode, version, userId, true);
+  }
+
+  private ErpContratRecord update(
+      long id,
+      String designation,
+      String libelleBeneficiaire,
+      String medilineCategorieCode,
+      int version,
+      Long userId,
+      boolean includeClassification) {
     ErpContratRecord current = get(id);
-    int updated = repository.updateDesignation(id, designation, version, userId);
+    String nextLibelle = includeClassification ? libelleBeneficiaire : current.libelleBeneficiaire();
+    String nextCategorie = includeClassification ? medilineCategorieCode : current.medilineCategorieCode();
+    int updated = repository.updateFields(
+        id, designation, nextLibelle, nextCategorie, false, version, userId);
     if (updated == 0) {
       throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrence détectée — recharger le contrat");
     }
+    String previousDesignation = current.designation() == null ? "" : current.designation().trim();
+    String nextDesignation = designation == null ? "" : designation.trim();
+    boolean designationChanged = !previousDesignation.equals(nextDesignation);
     if ("IMPORT_CLINIQUE".equalsIgnoreCase(current.sourceSystem()) && current.legacyCode() != null) {
       // Import entrant : pas d'écriture retour automatique.
       return get(id);
     }
-    String op = current.legacyCode() != null ? "UPDATE" : "INSERT";
-    enqueueReplication(id, current.code(), designation, op, userId);
-    String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
-    repository.updateSyncStatus(id, syncStatus);
-    repository.updateFingerprint(id, ClinicContratFingerprint.of(current.code(), designation));
-    scheduleOutboxFlushAfterCommit();
+    if (designationChanged) {
+      String op = current.legacyCode() != null ? "UPDATE" : "INSERT";
+      enqueueReplication(id, current.code(), designation, op, userId);
+      String syncStatus = writeGuard.beachEntityWriteEnabled("TCONTRAT") ? "PENDING" : "SUSPENDED";
+      repository.updateSyncStatus(id, syncStatus);
+      repository.updateFingerprint(id, ClinicContratFingerprint.of(current.code(), designation));
+      scheduleOutboxFlushAfterCommit();
+    }
     return get(id);
   }
 

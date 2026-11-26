@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import cd.shad.erp.cmk.cmkerp.gateway.facturation.AffiliationCoverageService;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ErpAyantService;
 import cd.shad.erp.cmk.cmkerp.gateway.facturation.ErpFacturationRelationalStore;
 import cd.shad.erp.cmk.cmkerp.gateway.mediline.MedilinePatientWriteService;
@@ -21,16 +22,19 @@ public class PatientRegistrationOrchestrator {
 
   private final ErpFacturationRelationalStore store;
   private final ErpAyantService ayantService;
+  private final AffiliationCoverageService coverageService;
   private final MedilinePatientWriteService medilineWrite;
   private final ObjectMapper objectMapper;
 
   public PatientRegistrationOrchestrator(
       ErpFacturationRelationalStore store,
       ErpAyantService ayantService,
+      AffiliationCoverageService coverageService,
       MedilinePatientWriteService medilineWrite,
       ObjectMapper objectMapper) {
     this.store = store;
     this.ayantService = ayantService;
+    this.coverageService = coverageService;
     this.medilineWrite = medilineWrite;
     this.objectMapper = objectMapper;
   }
@@ -79,25 +83,23 @@ public class PatientRegistrationOrchestrator {
 
     String medilineIpp = str(existing.get("medilineIpp"));
     String medilineStatus = str(existing.get("medilineStatus"));
+    Map<String, Object> coverage = null;
+    if (!skipAyant) {
+      coverage = coverageService.requireValid(affiliation);
+    }
+
     if (!"CREATED".equalsIgnoreCase(medilineStatus)) {
       try {
         if (!skipAyant) {
           if (societeId == null || contratId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Société et contrat obligatoires.");
           }
-          if (!store.societeMedilineMappingReady(societeId)) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST, "La société sélectionnée n’est pas reliée à un compte Mediline.");
-          }
         }
-        String compteCode = null;
-        if (societeId != null) {
-          compteCode = store.medilineCompteCodeForSociete(societeId).orElse(null);
-        }
+        String compteCode = coverage != null ? str(coverage.get("compteCode")) : null;
         if (compteCode == null && str(identity.get("compteCode")) != null) {
           compteCode = str(identity.get("compteCode"));
         }
-        Map<String, String> patientFields = patientFieldsFromIdentity(identity, compteCode);
+        Map<String, String> patientFields = patientFieldsFromIdentity(identity, compteCode, coverage);
         medilineIpp = medilineWrite.createPatient(actor, requestId, patientFields);
         store.updatePatientRegistrationMediline(requestId.toString(), medilineIpp, "CREATED", null, userId);
         medilineStatus = "CREATED";
@@ -147,7 +149,8 @@ public class PatientRegistrationOrchestrator {
     return result;
   }
 
-  private static Map<String, String> patientFieldsFromIdentity(Map<String, Object> identity, String compteCode) {
+  private static Map<String, String> patientFieldsFromIdentity(
+      Map<String, Object> identity, String compteCode, Map<String, Object> coverage) {
     Map<String, String> fields = new LinkedHashMap<>();
     putIfPresent(fields, "nom", identity.get("nom"));
     putIfPresent(fields, "postnom", identity.get("postnom"));
@@ -158,9 +161,15 @@ public class PatientRegistrationOrchestrator {
     putIfPresent(fields, "telephone", identity.get("telephone"));
     putIfPresent(fields, "email", identity.get("email"));
     putIfPresent(fields, "adresse", identity.get("adresse"));
-    putIfPresent(fields, "pec", identity.get("pec"));
     putIfPresent(fields, "fonction", identity.get("fonction"));
-    putIfPresent(fields, "categorieCode", identity.get("categorieCode"));
+    // PEC / catégorie : dérivées de l'affiliation (jamais de saisie manuelle identité).
+    if (coverage != null) {
+      putIfPresent(fields, "pec", coverage.get("pec"));
+      putIfPresent(fields, "categorieCode", coverage.get("medilineCategorieCode"));
+    } else {
+      putIfPresent(fields, "pec", identity.get("pec"));
+      putIfPresent(fields, "categorieCode", identity.get("categorieCode"));
+    }
     if (compteCode != null) {
       fields.put("compteCode", compteCode);
     }

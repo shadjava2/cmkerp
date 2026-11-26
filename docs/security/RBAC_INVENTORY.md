@@ -23,20 +23,23 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Tableau de bord | `SIDEBAR_FACTURATION_ACCUEIL` | `MODULE_FACTURATION` | OK |
 | KPI médicaments / privé / contrat | `FACTURATION_DASHBOARD_KPI_*` | `SIDEBAR_FACTURATION_ACCUEIL` | OK |
 | Chart évolution / table produits | `FACTURATION_DASHBOARD_CHART_EVOLUTION_VIEW` / `…_TABLE_PRODUITS_VIEW` | `SIDEBAR_FACTURATION_ACCUEIL` | OK |
-| Contrats (types TCONTRAT) | `SIDEBAR_FACTURATION_CONTRATS` + `FACTURATION_CONTRATS_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/contrats/**` |
+| Contrats (types TCONTRAT) | `SIDEBAR_FACTURATION_CONTRATS` + `FACTURATION_CONTRATS_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/contrats/**` ; classification bénéficiaire (`libelle_beneficiaire`, `mediline_categorie_code`) via CREATE/UPDATE contrats ; lookup `GET /lookups/mediline-categories` |
+| Couverture affiliation (PEC) | `FACTURATION_AYANTSDROIT_*` + `DMI_*_NOUVEAU_DOSSIER` | `MODULE_FACTURATION` / DMI | OK — `POST /api/v1/facturation/ayants/coverage/preview` |
 | Synchronisation CLINIQUE | `SIDEBAR_FACTURATION_SYNCHRONISATION` + `FACTURATION_SYNC_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/clinic-sync/**` |
-| Locations | `SIDEBAR_FACTURATION_LOCATIONS` + `FACTURATION_LOCATIONS_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
-| Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` + `FACTURATION_AYANTSDROIT_*` | `MODULE_FACTURATION` | OK — formulaire + recherche patient unifiée (catalogue cardex, sans MODULE_DMI) |
-| Sociétés | `SIDEBAR_FACTURATION_SOCIETES` + `FACTURATION_SOCIETES_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
-| Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` + `FACTURATION_PRESTATIONS_VIEW/IMPORT/STATUS_UPDATE` | `MODULE_FACTURATION` | API V31 import seul — écran non branché |
-| Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` + `FACTURATION_MEDICAMENTS_VIEW/IMPORT/STATUS_UPDATE` | `MODULE_FACTURATION` | API V31 import seul — écran non branché |
+| Locations | `SIDEBAR_FACTURATION_LOCATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` + `FACTURATION_AYANTSDROIT_*` | `MODULE_FACTURATION` | OK — recherche patient via catalogue cardex (`FACTURATION_AYANTSDROIT_VIEW/CREATE`, sans `MODULE_DMI`) |
+| Sociétés | `SIDEBAR_FACTURATION_SOCIETES` + `FACTURATION_SOCIETES_*` | `MODULE_FACTURATION` | OK — référentiel + mapping Mediline |
+| Correspondances société ↔ compte Mediline | `FACTURATION_SOCIETES_VIEW` / `FACTURATION_SOCIETES_UPDATE` | `SIDEBAR_FACTURATION_SOCIETES` | OK — `GET/PUT /api/v1/facturation/mappings/societe-comptes`, lookup `t_compte` |
+| Enregistrement dossier + affiliation (Chantier 02) | `DMI_ACCUEIL_NOUVEAU_DOSSIER` / `DMI_CARDEX_NOUVEAU_DOSSIER` / `DMI_RECEPTION_PATIENT_CREATE` (+ `FACTURATION_AYANTSDROIT_CREATE` pour l’ayant) | DMI + Facturation | OK — `POST /api/v1/dmi/registrations` |
+| Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` | `MODULE_FACTURATION` | OK |
 | Actions ventes médicaments | `STOCK_VENTE_VIEW` / `STOCK_VENTE_CREATE` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
-| Tarifs | `SIDEBAR_FACTURATION_TARIFS` + `FACTURATION_TARIFS_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
+| Tarifs | `SIDEBAR_FACTURATION_TARIFS` | `MODULE_FACTURATION` | OK |
 | Sync Beach ↔ CH | `STOCK_FACTURATION_SYNC` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
-| Imputations / Classes / Médecins / Services | `SIDEBAR_FACTURATION_*` + `FACTURATION_{IMPUTATIONS,CLASSES,MEDECINS,SERVICES}_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
-| Pharmacies / Stock lecture | `SIDEBAR_FACTURATION_PHARMACIES` / `_STOCK` + actions `FACTURATION_PHARMACIES_*` / `FACTURATION_STOCK_VIEW/IMPORT/STATUS_UPDATE` | `MODULE_FACTURATION` | API V31 — stock en projection, écran non branché |
-| Produits | `SIDEBAR_FACTURATION_PRODUITS` + `FACTURATION_PRODUITS_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
-| Utilisateurs | `SIDEBAR_FACTURATION_UTILISATEURS` + `FACTURATION_UTILISATEURS_*` | `MODULE_FACTURATION` | API V31 — sans mot de passe, écran non branché |
+| Imputations / Classes / Médecins / Services | `SIDEBAR_FACTURATION_*` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Pharmacies / Stock lecture | `SIDEBAR_FACTURATION_PHARMACIES` / `_STOCK` | `MODULE_FACTURATION` | PARTIEL (shell) |
+| Produits | `SIDEBAR_FACTURATION_PRODUITS` + `STOCK_PRODUIT_VIEW` | module + Stock | OK |
+| Utilisateurs | `SIDEBAR_FACTURATION_UTILISATEURS` | `MODULE_FACTURATION` | PARTIEL (shell) |
 | Facturation des soins (DMI) | `SIDEBAR_FACTURATION` | `MODULE_DMI` | Conservé (parcours clinique) |
 | Encaissements / créances natifs | — | — | Backlog (pas de KPI fictif) |
 

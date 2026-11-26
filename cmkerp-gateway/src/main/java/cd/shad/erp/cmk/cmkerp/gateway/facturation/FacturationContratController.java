@@ -48,14 +48,25 @@ public class FacturationContratController {
   public ResponseEntity<ErpContratRecord> create(
       @RequestBody Map<String, Object> body, HttpServletRequest request) {
     Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
-    return ResponseEntity.ok(service.create(stringVal(body.get("code")), stringVal(body.get("designation")), userId));
+    return ResponseEntity.ok(service.create(
+        stringVal(body.get("code")),
+        stringVal(body.get("designation")),
+        stringVal(body.get("libelleBeneficiaire")),
+        stringVal(body.get("medilineCategorieCode")),
+        userId));
   }
 
   @PutMapping("/contrats/{id}")
   public ResponseEntity<ErpContratRecord> update(
       @PathVariable long id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
     Long userId = AuthTokenExtractor.getCurrentUserId(request, jwtTokenProvider);
-    return ResponseEntity.ok(service.update(id, stringVal(body.get("designation")), intVal(body.get("version"), 1), userId));
+    return ResponseEntity.ok(service.update(
+        id,
+        stringVal(body.get("designation")),
+        stringVal(body.get("libelleBeneficiaire")),
+        stringVal(body.get("medilineCategorieCode")),
+        intVal(body.get("version"), 1),
+        userId));
   }
 
   @PutMapping("/contrats/{id}/actif")

@@ -356,6 +356,31 @@ public class FacturationRelationalController {
     return ResponseEntity.ok(societeMedilineMappingService.bind(societeId, compteCode, compteIntitule, userId));
   }
 
+  @GetMapping("/lookups/mediline-categories")
+  public ResponseEntity<Map<String, Object>> medilineCategoriesLookup() {
+    if (medilineJdbc == null) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Mediline indisponible.");
+    }
+    List<Map<String, Object>> items = medilineJdbc.query(
+        """
+            SELECT CODE AS code, INTITULE AS intitule
+            FROM t_categorie_patient
+            WHERE CODE <> '' AND CODE <> '-1' AND CHAR_LENGTH(CODE) <= 5
+            ORDER BY INTITULE, CODE
+            LIMIT 200
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("code", rs.getString("code") == null ? null : rs.getString("code").trim());
+          row.put("intitule", rs.getString("intitule") == null ? null : rs.getString("intitule").trim());
+          return row;
+        });
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", items.size());
+    return ResponseEntity.ok(result);
+  }
+
   @GetMapping("/lookups/mediline-comptes")
   public ResponseEntity<Map<String, Object>> medilineCompteLookup(
       @RequestParam(required = false, defaultValue = "") String q,

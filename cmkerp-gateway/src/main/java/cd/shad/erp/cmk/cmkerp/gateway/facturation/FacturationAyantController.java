@@ -33,6 +33,11 @@ public class FacturationAyantController {
     return ResponseEntity.ok(service.meta());
   }
 
+  @PostMapping("/coverage/preview")
+  public ResponseEntity<Map<String, Object>> coveragePreview(@RequestBody Map<String, Object> body) {
+    return ResponseEntity.ok(service.previewCoverage(body));
+  }
+
   /** Lookups ERP MySQL pour le formulaire — hors ClinicReferentialService / CLINIQUE. */
   @GetMapping("/lookups/locations")
   public ResponseEntity<Map<String, Object>> lookupLocations() {

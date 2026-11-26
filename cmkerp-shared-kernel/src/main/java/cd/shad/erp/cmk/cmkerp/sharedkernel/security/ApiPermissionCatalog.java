@@ -204,6 +204,12 @@ public final class ApiPermissionCatalog {
     rule("GET", "/api/v1/facturation/lookups/mediline-comptes",
         "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
         "SIDEBAR_FACTURATION_SOCIETES");
+    rule("GET", "/api/v1/facturation/lookups/mediline-categories",
+        "FACTURATION_CONTRATS_VIEW", "FACTURATION_CONTRATS_CREATE", "FACTURATION_CONTRATS_UPDATE",
+        "SIDEBAR_FACTURATION_CONTRATS");
+    rule("POST", "/api/v1/facturation/ayants/coverage/preview",
+        "FACTURATION_AYANTSDROIT_VIEW", "FACTURATION_AYANTSDROIT_CREATE", "FACTURATION_AYANTSDROIT_UPDATE",
+        "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER", "DMI_CARDEX_VIEW");
     rule("GET", "/api/v1/facturation/products/search",
         "FACTURATION_PRODUITS_VIEW", "FACTURATION_MEDICAMENTS_VIEW", "SIDEBAR_FACTURATION_PRODUITS",
         "SIDEBAR_FACTURATION_MEDICAMENTS");

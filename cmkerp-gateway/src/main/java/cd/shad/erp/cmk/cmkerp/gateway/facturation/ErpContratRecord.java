@@ -6,6 +6,8 @@ public record ErpContratRecord(
     Long id,
     String code,
     String designation,
+    String libelleBeneficiaire,
+    String medilineCategorieCode,
     boolean actif,
     String sourceSystem,
     String legacyCode,

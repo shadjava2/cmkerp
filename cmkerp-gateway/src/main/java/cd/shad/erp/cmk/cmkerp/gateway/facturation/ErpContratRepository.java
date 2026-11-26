@@ -20,6 +20,8 @@ public class ErpContratRepository {
       rs.getLong("id"),
       trim(rs.getString("code")),
       trim(rs.getString("designation")),
+      trim(rs.getString("libelle_beneficiaire")),
+      trim(rs.getString("mediline_categorie_code")),
       rs.getBoolean("actif"),
       trim(rs.getString("source_system")),
       trim(rs.getString("legacy_code")),
@@ -29,6 +31,11 @@ public class ErpContratRepository {
       toLdt(rs.getTimestamp("datecreate")),
       toLdt(rs.getTimestamp("dateupdate")));
 
+  private static final String SELECT_COLS = """
+      id, code, designation, libelle_beneficiaire, mediline_categorie_code, actif, source_system, legacy_code,
+      sync_status, last_synced_at, version, datecreate, dateupdate
+      """;
+
   private final JdbcTemplate jdbc;
 
   public ErpContratRepository(@Qualifier("primaryJdbcTemplate") JdbcTemplate jdbc) {
@@ -37,11 +44,7 @@ public class ErpContratRepository {
 
   public List<ErpContratRecord> search(String q, Boolean actif, int limit, int offset) {
     StringBuilder sql = new StringBuilder(
-        """
-            SELECT id, code, designation, actif, source_system, legacy_code, sync_status,
-                   last_synced_at, version, datecreate, dateupdate
-            FROM erp_contrats WHERE 1=1
-            """);
+        "SELECT " + SELECT_COLS + " FROM erp_contrats WHERE 1=1");
     var args = new java.util.ArrayList<Object>();
     if (q != null && !q.isBlank()) {
       sql.append(" AND (code LIKE ? OR designation LIKE ?)");
@@ -78,11 +81,7 @@ public class ErpContratRepository {
 
   public Optional<ErpContratRecord> findById(long id) {
     var list = jdbc.query(
-        """
-            SELECT id, code, designation, actif, source_system, legacy_code, sync_status,
-                   last_synced_at, version, datecreate, dateupdate
-            FROM erp_contrats WHERE id = ?
-            """,
+        "SELECT " + SELECT_COLS + " FROM erp_contrats WHERE id = ?",
         MAPPER,
         id);
     return list.stream().findFirst();
@@ -90,40 +89,39 @@ public class ErpContratRepository {
 
   public Optional<ErpContratRecord> findByCode(String code) {
     var list = jdbc.query(
-        """
-            SELECT id, code, designation, actif, source_system, legacy_code, sync_status,
-                   last_synced_at, version, datecreate, dateupdate
-            FROM erp_contrats WHERE code = ?
-            """,
+        "SELECT " + SELECT_COLS + " FROM erp_contrats WHERE code = ?",
         MAPPER,
         normalizeCode(code));
     return list.stream().findFirst();
   }
 
-  public long insert(String code, String designation, boolean actif, String sourceSystem,
+  public long insert(String code, String designation, String libelleBeneficiaire,
+      String medilineCategorieCode, boolean actif, String sourceSystem,
       String legacyCode, String syncStatus, Long userId) {
     KeyHolder keys = new GeneratedKeyHolder();
     jdbc.update(con -> {
       var ps = con.prepareStatement(
           """
               INSERT INTO erp_contrats
-                (code, designation, actif, source_system, legacy_code, sync_status,
-                 usercreateid, userupdateid)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (code, designation, libelle_beneficiaire, mediline_categorie_code, actif,
+                 source_system, legacy_code, sync_status, usercreateid, userupdateid)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               """,
           new String[] {"id"});
       ps.setString(1, normalizeCode(code));
       ps.setString(2, trimTo(designation, 50));
-      ps.setInt(3, actif ? 1 : 0);
-      ps.setString(4, sourceSystem);
-      ps.setString(5, legacyCode == null ? null : normalizeCode(legacyCode));
-      ps.setString(6, syncStatus);
+      ps.setString(3, blankToNull(trimTo(libelleBeneficiaire, 75)));
+      ps.setString(4, blankToNull(normalizeCategorieCode(medilineCategorieCode)));
+      ps.setInt(5, actif ? 1 : 0);
+      ps.setString(6, sourceSystem);
+      ps.setString(7, legacyCode == null ? null : normalizeCode(legacyCode));
+      ps.setString(8, syncStatus);
       if (userId == null) {
-        ps.setObject(7, null);
-        ps.setObject(8, null);
+        ps.setObject(9, null);
+        ps.setObject(10, null);
       } else {
-        ps.setLong(7, userId);
-        ps.setLong(8, userId);
+        ps.setLong(9, userId);
+        ps.setLong(10, userId);
       }
       return ps;
     }, keys);
@@ -131,14 +129,53 @@ public class ErpContratRepository {
     return key == null ? 0L : key.longValue();
   }
 
+  /** Compatibilité appels historiques (sans classification). */
+  public long insert(String code, String designation, boolean actif, String sourceSystem,
+      String legacyCode, String syncStatus, Long userId) {
+    return insert(code, designation, null, null, actif, sourceSystem, legacyCode, syncStatus, userId);
+  }
+
   public int updateDesignation(long id, String designation, int expectedVersion, Long userId) {
+    return updateFields(id, designation, null, null, false, expectedVersion, userId);
+  }
+
+  /**
+   * Mise à jour designation + classification ERP.
+   * {@code updateClassificationOnly=false} met à jour les trois champs ;
+   * {@code true} ne touche que la classification (pas de réplication Beach).
+   */
+  public int updateFields(
+      long id,
+      String designation,
+      String libelleBeneficiaire,
+      String medilineCategorieCode,
+      boolean classificationOnly,
+      int expectedVersion,
+      Long userId) {
+    if (classificationOnly) {
+      return jdbc.update(
+          """
+              UPDATE erp_contrats
+              SET libelle_beneficiaire = ?, mediline_categorie_code = ?,
+                  version = version + 1, userupdateid = ?, dateupdate = NOW()
+              WHERE id = ? AND version = ?
+              """,
+          blankToNull(trimTo(libelleBeneficiaire, 75)),
+          blankToNull(normalizeCategorieCode(medilineCategorieCode)),
+          userId,
+          id,
+          expectedVersion);
+    }
     return jdbc.update(
         """
             UPDATE erp_contrats
-            SET designation = ?, version = version + 1, userupdateid = ?, dateupdate = NOW()
+            SET designation = ?, libelle_beneficiaire = ?, mediline_categorie_code = ?,
+                version = version + 1, userupdateid = ?, dateupdate = NOW()
             WHERE id = ? AND version = ?
             """,
         trimTo(designation, 50),
+        blankToNull(trimTo(libelleBeneficiaire, 75)),
+        blankToNull(normalizeCategorieCode(medilineCategorieCode)),
         userId,
         id,
         expectedVersion);
@@ -278,11 +315,7 @@ public class ErpContratRepository {
 
   public List<ErpContratRecord> listBySourceSystem(String sourceSystem) {
     return jdbc.query(
-        """
-            SELECT id, code, designation, actif, source_system, legacy_code, sync_status,
-                   last_synced_at, version, datecreate, dateupdate
-            FROM erp_contrats WHERE source_system = ? ORDER BY code
-            """,
+        "SELECT " + SELECT_COLS + " FROM erp_contrats WHERE source_system = ? ORDER BY code",
         MAPPER,
         sourceSystem);
   }
@@ -654,7 +687,22 @@ public class ErpContratRepository {
       return null;
     }
     String t = v.trim();
+    if (t.isEmpty()) {
+      return null;
+    }
     return t.length() <= max ? t : t.substring(0, max);
+  }
+
+  private static String blankToNull(String v) {
+    return v == null || v.isBlank() ? null : v.trim();
+  }
+
+  private static String normalizeCategorieCode(String code) {
+    if (code == null || code.isBlank()) {
+      return null;
+    }
+    String t = code.trim().toUpperCase(java.util.Locale.ROOT);
+    return t.length() <= 5 ? t : t.substring(0, 5);
   }
 
   private static LocalDateTime toLdt(Timestamp ts) {
