@@ -966,6 +966,78 @@ public class ErpFacturationRelationalStore {
     });
   }
 
+  /** Projection légère pour sélecteurs formulaire — MySQL only, sans CLINIQUE. */
+  public List<Map<String, Object>> listActiveLocationsForPicker() {
+    return jdbc.query(
+        """
+            SELECT id, code, libelle, adresse, legacy_code, actif
+            FROM erp_locations
+            WHERE actif = 1
+            ORDER BY code ASC
+            LIMIT 50
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("id", rs.getLong("id"));
+          row.put("code", rs.getString("code"));
+          row.put("libelle", rs.getString("libelle"));
+          row.put("adresse", rs.getString("adresse"));
+          row.put("legacyCode", rs.getString("legacy_code"));
+          row.put("actif", rs.getBoolean("actif"));
+          return row;
+        });
+  }
+
+  public List<Map<String, Object>> listActiveContratsForPicker() {
+    return jdbc.query(
+        """
+            SELECT id, code, designation, actif
+            FROM erp_contrats
+            WHERE actif = 1
+            ORDER BY code ASC
+            LIMIT 200
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("id", rs.getLong("id"));
+          row.put("code", rs.getString("code"));
+          row.put("designation", rs.getString("designation"));
+          row.put("actif", rs.getBoolean("actif"));
+          return row;
+        });
+  }
+
+  public Map<String, Object> searchSocietesForPicker(String q, int page, int size) {
+    int safeSize = Math.min(Math.max(size, 1), 50);
+    int safePage = Math.max(page, 0);
+    List<Map<String, Object>> items = searchSocietes(q, true, safeSize, safePage * safeSize);
+    List<Map<String, Object>> lean = new ArrayList<>(items.size());
+    for (Map<String, Object> item : items) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", item.get("id"));
+      row.put("code", item.get("key"));
+      row.put("designation", item.get("label"));
+      row.put("actif", item.get("actif"));
+      row.put("contratId", item.get("contratId"));
+      row.put("contratCode", item.get("contratCode"));
+      row.put("contratDesignation", item.get("contratDesignation"));
+      @SuppressWarnings("unchecked")
+      Map<String, Object> fields = item.get("fields") instanceof Map<?, ?> m
+          ? (Map<String, Object>) m
+          : Map.of();
+      if (row.get("contratId") == null) {
+        row.put("contratId", fields.get("contratId"));
+      }
+      lean.add(row);
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", lean);
+    result.put("total", countSocietes(q, true));
+    result.put("page", safePage);
+    result.put("size", safeSize);
+    return result;
+  }
+
   private List<Map<String, Object>> searchLocations(String q, Boolean actif, int limit, int offset) {
     StringBuilder sql = new StringBuilder(
         """

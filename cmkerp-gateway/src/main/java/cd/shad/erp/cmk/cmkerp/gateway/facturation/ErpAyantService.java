@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -95,10 +96,37 @@ public class ErpAyantService {
     result.put("nationalites", Map.of(
         "C", "Congolaise",
         "E", "Étrangère"));
+    // Petits référentiels ERP locaux — jamais CLINIQUE Beach.
+    List<Map<String, Object>> locations = store.listActiveLocationsForPicker();
+    List<Map<String, Object>> contrats = store.listActiveContratsForPicker();
+    result.put("locations", locations);
+    result.put("contrats", contrats);
+    result.put("locationsTotal", locations.size());
+    result.put("contratsTotal", contrats.size());
     result.put("beachMatriculeMaxLen", BEACH_MATRICULE_MAX);
     result.put("beachWriteEnabled", writeGuard.beachEntityWriteEnabled(ENTITY));
     result.put("writeEntitiesHint", "TCONTRAT,TAYANTDROIT");
     return result;
+  }
+
+  public Map<String, Object> lookupLocations() {
+    List<Map<String, Object>> items = store.listActiveLocationsForPicker();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", items.size());
+    return result;
+  }
+
+  public Map<String, Object> lookupContrats() {
+    List<Map<String, Object>> items = store.listActiveContratsForPicker();
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", items.size());
+    return result;
+  }
+
+  public Map<String, Object> lookupSocietes(String q, int page, int size) {
+    return store.searchSocietesForPicker(q, page, size);
   }
 
   @Transactional

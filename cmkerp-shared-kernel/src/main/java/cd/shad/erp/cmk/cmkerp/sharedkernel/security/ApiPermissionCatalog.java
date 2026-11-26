@@ -206,7 +206,11 @@ public final class ApiPermissionCatalog {
 
     // Ayants droit — API métier dédiée (erp_ayants_droit + outbox TAYANTDROIT)
     rule("GET", "/api/v1/facturation/ayants/meta",
-        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT",
+        "FACTURATION_AYANTSDROIT_CREATE");
+    rule("GET", "/api/v1/facturation/ayants/lookups",
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT",
+        "FACTURATION_AYANTSDROIT_CREATE");
     rule("GET", "/api/v1/facturation/ayants",
         "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
     rule("POST", "/api/v1/facturation/ayants",

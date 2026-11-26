@@ -33,6 +33,25 @@ public class FacturationAyantController {
     return ResponseEntity.ok(service.meta());
   }
 
+  /** Lookups ERP MySQL pour le formulaire — hors ClinicReferentialService / CLINIQUE. */
+  @GetMapping("/lookups/locations")
+  public ResponseEntity<Map<String, Object>> lookupLocations() {
+    return ResponseEntity.ok(service.lookupLocations());
+  }
+
+  @GetMapping("/lookups/contrats")
+  public ResponseEntity<Map<String, Object>> lookupContrats() {
+    return ResponseEntity.ok(service.lookupContrats());
+  }
+
+  @GetMapping("/lookups/societes")
+  public ResponseEntity<Map<String, Object>> lookupSocietes(
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "30") int size) {
+    return ResponseEntity.ok(service.lookupSocietes(q, page, size));
+  }
+
   @GetMapping
   public ResponseEntity<Map<String, Object>> list(
       @RequestParam(required = false) String q,
