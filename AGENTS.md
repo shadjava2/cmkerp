@@ -1,6 +1,6 @@
 # AGENTS.md — CMK ERP
 
-## Six standards architecturaux permanents
+## Sept standards architecturaux permanents
 
 | Standard | Fichier | Responsabilité |
 | --- | --- | --- |
@@ -10,12 +10,15 @@
 | Production Release | `.cursor/rules/production-release-standard.mdc` | Qualité produit, UI métier, zéro prototypage |
 | Bidirectional Synchronization | `.cursor/rules/clinic-bidirectional-sync.mdc` | Outbox, réplication, rapprochement |
 | ERP Relational Data | `.cursor/rules/erp-relational-data-standard.mdc` | Tables métier, FK, libellés, sélecteurs |
+| Recherche patient unifiée | `../.cursor/rules/unified-patient-search.mdc` | Moteur Mediline commun DMI / Facturation / ERP |
 
 CMK ERP est **une seule application**, plusieurs espaces métier. On change de module, pas d’identité produit.
 
 **Philosophie produit** : complexité technique en arrière-plan, simplicité maximale pour l’utilisateur, sécurité serveur renforcée, interface exclusivement métier. Aucun texte de développement, bouton de simulation ou fonctionnalité fictive dans l’UI.
 
 **Importations** : parcours Importer → Comparer → Sélectionner → Valider → Enregistrer → Actualiser via `ErpImportDialog` (pas de `window.confirm`). SQL Server = lecture seule ; MySQL = écriture contrôlée.
+
+**Recherche patient** : un seul moteur Mediline (`buildPatientQuickSearchCriteria` + `POST /api/v1/cardex/patients/recherche` + `PatientSearchPanel` / `PatientPicker`). Modes NAVIGATION (DMI) et SELECTION (formulaires ERP). Interdit de dupliquer la logique de recherche.
 
 ### Migration CLINIQUE (coexistence)
 

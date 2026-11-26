@@ -121,7 +121,7 @@ public class MedilinePatientController {
   @GetMapping("/societes")
   public Results<Company> companies(Principal principal, @RequestParam(name = "q", defaultValue = "") String q,
       @RequestParam(name = "page", defaultValue = "0") int page) {
-    var jdbc = database(principal);
+    var jdbc = searchDatabase(principal);
     if (page < 0 || page > 1000 || q.length() > 150) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Filtre ou page invalide.");
     }
@@ -143,11 +143,10 @@ public class MedilinePatientController {
 
   @PostMapping("/patients/recherche")
   public Results<Patient> patients(Principal principal, @RequestBody Criteria criteria) {
-    var jdbc = database(principal);
+    var jdbc = searchDatabase(principal);
     var params = new MapSqlParameterSource();
     var where = new StringBuilder(" WHERE p.PERSONNE_PHYSIQUE = 1");
-    addContains(where, params, "CONCAT_WS(' ', p.NOM, p.POSTNOM, p.PRENOM)", "identite",
-        criteria.identite(), 150);
+    applyIdentite(where, params, criteria.identite());
     addContains(where, params, "p.NOM", "nom", criteria.nom(), 100);
     addContains(where, params, "p.POSTNOM", "postnom", criteria.postnom(), 75);
     addContains(where, params, "p.PRENOM", "prenom", criteria.prenom(), 150);
@@ -732,18 +731,40 @@ public class MedilinePatientController {
     return "INDETERMINE";
   }
 
+  /** Accès Cardex complet (fiches, création, détail médical). */
+  private static final List<String> CARDEX_ACCESS_PERMS = List.of(
+      "MODULE_DMI", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW",
+      "SIDEBAR_RECEPTION", "DMI_RECEPTION_PATIENT_VIEW");
+
+  /**
+   * Recherche d'identité patient — moteur unifié DMI / Facturation.
+   * N'accorde pas l'accès au dossier médical complet.
+   */
+  private static final List<String> PATIENT_IDENTITY_SEARCH_PERMS = List.of(
+      "MODULE_DMI", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW", "DMI_CARDEX_RECHERCHE",
+      "DMI_ACCUEIL_RECHERCHE_PATIENT", "SIDEBAR_RECEPTION", "DMI_RECEPTION_PATIENT_VIEW",
+      "FACTURATION_AYANTSDROIT_VIEW", "FACTURATION_AYANTSDROIT_CREATE");
+
   private NamedParameterJdbcTemplate database(Principal principal) {
+    return requireMediline(principal, CARDEX_ACCESS_PERMS,
+        "Vous ne disposez pas des autorisations nécessaires pour accéder au cardex.");
+  }
+
+  private NamedParameterJdbcTemplate searchDatabase(Principal principal) {
+    return requireMediline(principal, PATIENT_IDENTITY_SEARCH_PERMS,
+        "Vous ne disposez pas des autorisations nécessaires pour rechercher un patient.");
+  }
+
+  private NamedParameterJdbcTemplate requireMediline(Principal principal, List<String> anyOf,
+      String forbiddenMessage) {
     if (principal == null) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED);
     }
     Utilisateur user = users.findByUsername(principal.getName())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN));
-    boolean allowed = permissionAuthorization.hasAnyPermission(user.getId(),
-        java.util.List.of("MODULE_DMI", "SIDEBAR_CARDEX", "DMI_CARDEX_VIEW",
-            "SIDEBAR_RECEPTION", "DMI_RECEPTION_PATIENT_VIEW"));
+    boolean allowed = permissionAuthorization.hasAnyPermission(user.getId(), anyOf);
     if (!allowed) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-          "Vous ne disposez pas des autorisations nécessaires pour accéder au cardex.");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, forbiddenMessage);
     }
     var jdbc = mediline.getIfAvailable();
     if (jdbc == null) throw unavailable();
@@ -763,6 +784,26 @@ public class MedilinePatientController {
 
   private static String contains(String value) {
     return "%" + value.trim().replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+  }
+
+  /**
+   * Recherche rapide multiterme sur l'identité concaténée (AND entre termes).
+   * Un token unique contenant un chiffre est traité comme IPP exact.
+   */
+  private static void applyIdentite(StringBuilder where, MapSqlParameterSource params, String value) {
+    if (!hasValue(value)) return;
+    String raw = checked(value, 150);
+    String[] terms = raw.split("[\\p{Z}\\s\\p{Pd}'’]+");
+    List<String> nonEmpty = new ArrayList<>();
+    for (String term : terms) {
+      if (!term.isEmpty()) nonEmpty.add(term);
+    }
+    if (nonEmpty.size() == 1 && nonEmpty.get(0).chars().anyMatch(Character::isDigit)) {
+      where.append(" AND p.CODE = :ippFromIdentite");
+      params.addValue("ippFromIdentite", nonEmpty.get(0));
+      return;
+    }
+    addContains(where, params, "CONCAT_WS(' ', p.NOM, p.POSTNOM, p.PRENOM)", "identite", raw, 150);
   }
 
   private static void addContains(StringBuilder where, MapSqlParameterSource params,

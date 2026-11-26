@@ -26,7 +26,7 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Contrats (types TCONTRAT) | `SIDEBAR_FACTURATION_CONTRATS` + `FACTURATION_CONTRATS_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/contrats/**` |
 | Synchronisation CLINIQUE | `SIDEBAR_FACTURATION_SYNCHRONISATION` + `FACTURATION_SYNC_*` | `MODULE_FACTURATION` | OK — API cataloguée `/api/v1/facturation/clinic-sync/**` |
 | Locations | `SIDEBAR_FACTURATION_LOCATIONS` + `FACTURATION_LOCATIONS_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
-| Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` + `FACTURATION_AYANTSDROIT_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
+| Ayants droit | `SIDEBAR_FACTURATION_AYANTSDROIT` + `FACTURATION_AYANTSDROIT_*` | `MODULE_FACTURATION` | OK — formulaire + recherche patient unifiée (catalogue cardex, sans MODULE_DMI) |
 | Sociétés | `SIDEBAR_FACTURATION_SOCIETES` + `FACTURATION_SOCIETES_*` | `MODULE_FACTURATION` | API V31 — écran métier non branché |
 | Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` + `FACTURATION_PRESTATIONS_VIEW/IMPORT/STATUS_UPDATE` | `MODULE_FACTURATION` | API V31 import seul — écran non branché |
 | Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` + `FACTURATION_MEDICAMENTS_VIEW/IMPORT/STATUS_UPDATE` | `MODULE_FACTURATION` | API V31 import seul — écran non branché |

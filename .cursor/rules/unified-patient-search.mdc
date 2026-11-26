@@ -1,0 +1,39 @@
+---
+description: Moteur de recherche patient unifié CMK ERP (DMI / Facturation / futurs modules)
+alwaysApply: true
+---
+
+# STANDARD DE RECHERCHE PATIENT UNIFIÉE — MANDATORY
+
+Toute fonctionnalité nécessitant la recherche ou la sélection d’un patient doit réutiliser le **moteur de recherche patient commun** du CMK ERP.
+
+## Principes
+
+1. **Un référentiel Mediline = un moteur = des résultats identiques** pour les mêmes critères (sous réserve des restrictions RBAC légitimes).
+2. **Interdit** de créer un moteur de recherche patient spécifique à un formulaire lorsque le moteur commun couvre déjà le besoin.
+3. La recherche rapide, la recherche avancée (`PatientSearchPanel`), la normalisation (`buildPatientQuickSearchCriteria`) et l’endpoint `POST /api/v1/cardex/patients/recherche` sont mutualisés.
+4. Seuls le **contexte RBAC**, les **informations autorisées** et l’**action après sélection** peuvent différer.
+
+## Modes
+
+| Mode | Usage | Après sélection |
+| --- | --- | --- |
+| NAVIGATION | DMI | Ouvre le Cardex / parcours clinique |
+| SELECTION | Facturation, formulaires ERP | Retourne le patient au formulaire (`PatientPicker`) |
+
+## Recherche rapide
+
+- Critères via `buildPatientQuickSearchCriteria` → `identite` multiterme **ou** `nIpp` exact.
+- **Ne jamais** peupler `nom` + `identite` avec la même phrase (AND sur NOM seul → faux négatifs).
+- Backend : AND entre termes sur `CONCAT_WS(nom, postnom, prenom)` ; IPP exact si token unique avec chiffre.
+
+## RBAC
+
+- Facturation utilise `FACTURATION_AYANTSDROIT_*` pour la recherche d’identité — **pas** `MODULE_DMI`.
+- Rechercher un patient pour un ayant droit **n’accorde pas** l’accès au dossier médical.
+
+## Composants
+
+- Sélection : `consolenotification/src/components/erp/PatientPicker.tsx`
+- Avancée : `PatientSearchPanel`
+- Critères : `patientWorkspace.ts` (`EMPTY_SEARCH`, `buildPatientQuickSearchCriteria`)

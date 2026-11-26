@@ -46,6 +46,19 @@ class ApiPermissionCatalogTest {
   }
 
   @Test
+  void patientSearchAllowsFacturationAyantsWithoutModuleDmi() {
+    var rule = ApiPermissionCatalog.match("POST", "/api/v1/cardex/patients/recherche").orElseThrow();
+    assertTrue(java.util.Arrays.asList(rule.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_VIEW"));
+    assertTrue(java.util.Arrays.asList(rule.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_CREATE"));
+    for (String code : rule.anyOfPermissions()) {
+      assertFalse(code.equals("MODULE_DMI") || code.equals("MODULE_FACTURATION"),
+          "MODULE_* ne doit pas autoriser seul la recherche patient");
+    }
+    var societes = ApiPermissionCatalog.match("GET", "/api/v1/cardex/societes").orElseThrow();
+    assertTrue(java.util.Arrays.asList(societes.anyOfPermissions()).contains("FACTURATION_AYANTSDROIT_CREATE"));
+  }
+
+  @Test
   void dmiMedilineSearchDoesNotAcceptModuleDmiAlone() {
     var rule = ApiPermissionCatalog.match("GET", "/api/v1/mediline/patients");
     assertTrue(rule.isPresent());
