@@ -422,27 +422,64 @@ public class FacturationDataConsolidationService {
 
   public Map<String, Object> outboundAdaptersInventory() {
     List<Map<String, Object>> entities = new ArrayList<>();
-    entities.add(adapterRow("TCONTRAT", true, true, true, true, "TCONTRAT", "Démontré live"));
-    entities.add(adapterRow("TSERVICE", true, false, false, false, null, "Lecture + import ERP seulement"));
-    entities.add(adapterRow("TIMPUTATION", true, false, false, false, null, "Lecture + import ERP seulement"));
-    entities.add(adapterRow("TLOCATION", true, false, false, false, null, "Lecture + import ERP seulement"));
-    entities.add(adapterRow("TSOCIETE", true, false, false, false, null, "Non démontré"));
-    entities.add(adapterRow("TCLASSE", true, false, false, false, null, "Non démontré"));
-    entities.add(adapterRow("TTARIF", true, false, false, false, null, "Non démontré"));
-    entities.add(adapterRow("TAYANT", true, false, false, false, null, "Non démontré"));
-    entities.add(adapterRow("TPRESTATION", true, false, false, false, null,
-        "Intention outbox possible ; worker n'exécute pas ; règles IDMVT ouvertes"));
-    entities.add(adapterRow("TMEDICAMENT", true, false, false, false, null,
-        "Intention outbox possible ; worker n'exécute pas ; règles IDM ouvertes"));
-    entities.add(adapterRow("TSTOCK", true, false, false, false, null,
-        "Projection + compartiments ; STOCK1..n non mappés automatiquement"));
+    List<String> workerCapable = new ArrayList<>();
+    // TCONTRAT : adaptateur dédié dans ClinicBeachOutboxWorker (pas catalogue référentiel).
+    boolean tcontratWhitelisted = writeGuard.beachEntityWriteEnabled("TCONTRAT");
+    entities.add(adapterRow(
+        "TCONTRAT",
+        true,
+        true,
+        true,
+        true,
+        tcontratWhitelisted,
+        tcontratWhitelisted ? "TCONTRAT" : null,
+        tcontratWhitelisted
+            ? "Adaptateur dédié INSERT/UPDATE + vérification SYNCED"
+            : "Adaptateur présent — hors allow-list write-entities"));
+    if (tcontratWhitelisted) {
+      workerCapable.add("TCONTRAT");
+    }
+    for (Definition def : ClinicReferentialCatalog.all()) {
+      boolean outbound = def.outbound();
+      boolean insert = outbound && def.outboundInsert();
+      boolean update = outbound;
+      boolean whitelisted = writeGuard.beachEntityWriteEnabled(def.entityType());
+      boolean worker = outbound && whitelisted && writeGuard.beachWriteEnabled();
+      if (worker) {
+        workerCapable.add(def.entityType());
+      }
+      String note;
+      if (!outbound) {
+        note = def.mode() == ClinicReferentialCatalog.Mode.PROJECTION
+            ? "Projection / compartiments — réplication Beach différée"
+            : "Import sélectif uniquement — réplication Beach différée";
+      } else if (!whitelisted) {
+        note = "Adaptateur catalogue INSERT/UPDATE présent — hors allow-list write-entities";
+      } else if (!writeGuard.beachWriteEnabled()) {
+        note = "Allow-list OK — write-enabled=false → intentions SUSPENDED";
+      } else {
+        note = "Adaptateur catalogue + worker opérationnel (recette métier à confirmer)";
+      }
+      entities.add(adapterRow(
+          def.entityType(),
+          true,
+          insert,
+          update,
+          worker,
+          whitelisted,
+          whitelisted ? def.entityType() : null,
+          note));
+    }
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("writeEntities", writeGuard.properties().getBeach().getWriteEntities());
     out.put("beachWriteEnabled", writeGuard.beachWriteEnabled());
+    out.put("beachSyncEnabled", writeGuard.beachSyncEnabled());
     out.put("chWriteEnabled", writeGuard.chWriteEnabled());
-    out.put("workerExecutes", List.of("TCONTRAT"));
+    out.put("workerExecutes", workerCapable);
     out.put("entities", entities);
-    out.put("note", "Une intention SUSPENDED ≠ adaptateur INSERT Beach opérationnel.");
+    out.put(
+        "note",
+        "Autorisé (.env) ≠ démontré en recette. SYNCED après relecture Beach uniquement.");
     return out;
   }
 
@@ -588,14 +625,24 @@ public class FacturationDataConsolidationService {
   }
 
   private static Map<String, Object> adapterRow(
-      String entity, boolean reader, boolean insert, boolean update, boolean worker, String whitelist, String note) {
+      String entity,
+      boolean reader,
+      boolean insert,
+      boolean update,
+      boolean worker,
+      boolean authorized,
+      String whitelist,
+      String note) {
     Map<String, Object> row = new LinkedHashMap<>();
     row.put("entity", entity);
     row.put("legacyReader", reader);
     row.put("insertAdapter", insert);
     row.put("updateAdapter", update);
     row.put("workerCapable", worker);
+    row.put("authorized", authorized);
     row.put("productionWhitelist", whitelist);
+    row.put("testedLive", false);
+    row.put("operationalProven", false);
     row.put("note", note);
     return row;
   }

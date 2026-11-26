@@ -105,7 +105,7 @@ public class ErpAyantService {
     result.put("contratsTotal", contrats.size());
     result.put("beachMatriculeMaxLen", BEACH_MATRICULE_MAX);
     result.put("beachWriteEnabled", writeGuard.beachEntityWriteEnabled(ENTITY));
-    result.put("writeEntitiesHint", "TCONTRAT,TAYANTDROIT");
+    result.put("writeEntitiesHint", writeGuard.properties().getBeach().getWriteEntities());
     return result;
   }
 
@@ -151,6 +151,7 @@ public class ErpAyantService {
 
     var societe = store.findSocieteDetail(societeId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Société introuvable."));
+    requireSocieteMedilineMatched(societeId, societe);
     var contrat = store.findContratDetail(contratId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contrat introuvable."));
     var location = store.findLocationDetail(locationId)
@@ -214,6 +215,7 @@ public class ErpAyantService {
 
     var societe = store.findSocieteDetail(societeId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Société introuvable."));
+    requireSocieteMedilineMatched(societeId, societe);
     var contrat = store.findContratDetail(contratId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contrat introuvable."));
     var location = store.findLocationDetail(locationId)
@@ -339,6 +341,19 @@ public class ErpAyantService {
       return null;
     }
     return raw.trim().toUpperCase();
+  }
+
+  private void requireSocieteMedilineMatched(long societeId, Map<String, Object> societe) {
+    if (store.societeMedilineMappingReady(societeId)) {
+      return;
+    }
+    String designation = firstNonBlank(
+        firstNonBlank(str(societe.get("designation")), str(societe.get("code"))),
+        "#" + societeId);
+    throw new ResponseStatusException(
+        HttpStatus.BAD_REQUEST,
+        "La société « " + designation + " » n’est pas reliée à un compte Mediline. "
+            + "Validez d’abord la correspondance société / compte.");
   }
 
   private String resolveBeachMatricule(String medilineIpp, String historiqueHint) {

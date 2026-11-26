@@ -1,7 +1,11 @@
 package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 
+import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -254,6 +258,76 @@ public class FacturationRelationalController {
     result.put("total", store.countSocieteMedilineMappings(q, status));
     result.put("page", safePage);
     result.put("size", safeSize);
+    return ResponseEntity.ok(result);
+  }
+
+  @GetMapping("/mappings/societe-comptes/suggestions")
+  public ResponseEntity<Map<String, Object>> societeMedilineSuggestions(
+      @RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "40") int size) {
+    if (medilineJdbc == null) {
+      throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Mediline indisponible.");
+    }
+    int safeSize = Math.min(Math.max(size, 1), 100);
+    int safePage = Math.max(page, 0);
+    List<Map<String, Object>> societes = store.listSocieteMedilineMappings(
+        q, "UNMATCHED", safeSize, safePage * safeSize);
+    long total = store.countSocieteMedilineMappings(q, "UNMATCHED");
+    List<Map<String, Object>> comptes = medilineJdbc.queryForList(
+        """
+            SELECT CODE, INTITULE, CATEGORIE_PATIENT, ETAT
+            FROM t_compte
+            WHERE CODE <> ''
+            ORDER BY INTITULE, CODE
+            LIMIT 4000
+            """);
+    List<Map<String, Object>> items = new ArrayList<>();
+    for (Map<String, Object> societe : societes) {
+      String designation = String.valueOf(societe.getOrDefault("societeDesignation", ""));
+      String code = String.valueOf(societe.getOrDefault("societeCode", ""));
+      String normDes = normalizeLabel(designation);
+      String normCode = normalizeLabel(code);
+      List<Map<String, Object>> suggestions = new ArrayList<>();
+      for (Map<String, Object> compte : comptes) {
+        String compteCode = String.valueOf(compte.getOrDefault("CODE", ""));
+        String intitule = String.valueOf(compte.getOrDefault("INTITULE", ""));
+        String normIntitule = normalizeLabel(intitule);
+        String normCompteCode = normalizeLabel(compteCode);
+        int score = 0;
+        if (!normCode.isEmpty() && normCode.equals(normCompteCode)) {
+          score = 100;
+        } else if (!normDes.isEmpty() && normDes.equals(normIntitule)) {
+          score = 95;
+        } else if (!normDes.isEmpty() && (normIntitule.contains(normDes) || normDes.contains(normIntitule))) {
+          score = 80;
+        } else {
+          score = tokenOverlapScore(normDes, normIntitule);
+        }
+        if (score < 55) {
+          continue;
+        }
+        Map<String, Object> suggestion = new LinkedHashMap<>();
+        suggestion.put("medilineCompteCode", compteCode);
+        suggestion.put("medilineCompteIntitule", intitule);
+        suggestion.put("categoriePatient", compte.get("CATEGORIE_PATIENT"));
+        suggestion.put("score", score);
+        suggestions.add(suggestion);
+      }
+      suggestions.sort(Comparator.comparingInt((Map<String, Object> s) -> ((Number) s.get("score")).intValue()).reversed());
+      if (suggestions.size() > 3) {
+        suggestions = suggestions.subList(0, 3);
+      }
+      Map<String, Object> row = new LinkedHashMap<>(societe);
+      row.put("suggestions", suggestions);
+      items.add(row);
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("items", items);
+    result.put("total", total);
+    result.put("page", safePage);
+    result.put("size", safeSize);
+    result.put("validationRequired", true);
     return ResponseEntity.ok(result);
   }
 
@@ -531,5 +605,41 @@ public class FacturationRelationalController {
       throw new ResponseStatusException(
           HttpStatus.INTERNAL_SERVER_ERROR, "Journalisation synchronisation impossible");
     }
+  }
+
+  private static String normalizeLabel(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return "";
+    }
+    String nfd = Normalizer.normalize(raw.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD);
+    return nfd.replaceAll("\\p{M}+", "").replaceAll("[^a-z0-9]+", " ").trim().replaceAll("\\s+", " ");
+  }
+
+  private static int tokenOverlapScore(String left, String right) {
+    if (left.isEmpty() || right.isEmpty()) {
+      return 0;
+    }
+    String[] a = left.split(" ");
+    String[] b = right.split(" ");
+    if (a.length == 0 || b.length == 0) {
+      return 0;
+    }
+    int hits = 0;
+    for (String token : a) {
+      if (token.length() < 3) {
+        continue;
+      }
+      for (String other : b) {
+        if (token.equals(other)) {
+          hits++;
+          break;
+        }
+      }
+    }
+    if (hits == 0) {
+      return 0;
+    }
+    int denom = Math.max(a.length, b.length);
+    return Math.min(90, (int) Math.round((hits * 100.0) / denom));
   }
 }

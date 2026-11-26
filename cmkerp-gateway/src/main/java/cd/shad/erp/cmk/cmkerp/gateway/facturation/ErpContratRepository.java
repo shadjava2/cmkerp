@@ -440,6 +440,50 @@ public class ErpContratRepository {
         Math.max(maxAttempts, 1));
   }
 
+  /**
+   * Reprise manuelle d'une intention FAILED / UNCERTAIN / SUSPENDED vers PENDING.
+   */
+  public int requeueOutboxItem(long id) {
+    return jdbc.update(
+        """
+            UPDATE erp_sync_outbox
+            SET status = 'PENDING',
+                next_attempt_at = NULL,
+                last_error = NULL,
+                dateupdate = NOW()
+            WHERE id = ?
+              AND status IN ('FAILED', 'UNCERTAIN', 'SUSPENDED')
+            """,
+        id);
+  }
+
+  public Optional<Map<String, Object>> findOutboxById(long id) {
+    List<Map<String, Object>> rows = jdbc.query(
+        """
+            SELECT id, operation_id, entity_type, entity_id, legacy_key, operation_type, payload_json,
+                   status, attempt_count, correlation_id, last_error
+            FROM erp_sync_outbox
+            WHERE id = ?
+            """,
+        (rs, i) -> {
+          Map<String, Object> row = new java.util.LinkedHashMap<>();
+          row.put("id", rs.getLong("id"));
+          row.put("operationId", rs.getString("operation_id"));
+          row.put("entityType", rs.getString("entity_type"));
+          row.put("entityId", rs.getObject("entity_id"));
+          row.put("legacyKey", rs.getString("legacy_key"));
+          row.put("operationType", rs.getString("operation_type"));
+          row.put("payloadJson", rs.getString("payload_json"));
+          row.put("status", rs.getString("status"));
+          row.put("attemptCount", rs.getInt("attempt_count"));
+          row.put("correlationId", rs.getString("correlation_id"));
+          row.put("lastError", rs.getString("last_error"));
+          return row;
+        },
+        id);
+    return rows.stream().findFirst();
+  }
+
   public int promoteSuspendedToPendingForEntity(String entityType) {
     return jdbc.update(
         """

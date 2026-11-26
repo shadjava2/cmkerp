@@ -3,10 +3,32 @@ param(
   [switch]$Background,
   [switch]$SkipBuild,
   [switch]$KillPort,
-  [string]$Profile = $(if ($env:SPRING_PROFILES_ACTIVE) { $env:SPRING_PROFILES_ACTIVE } else { "dev" })
+  [string]$Profile = ""
 )
 
 $ErrorActionPreference = "Stop"
+$LocalEnvFile = Join-Path $PSScriptRoot ".env"
+if (Test-Path -LiteralPath $LocalEnvFile) {
+  foreach ($line in Get-Content -LiteralPath $LocalEnvFile -Encoding UTF8) {
+    $entry = $line.Trim()
+    if ($entry.Length -eq 0 -or $entry.StartsWith("#")) { continue }
+    if ($entry -notmatch '^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
+      throw "Ligne .env invalide. Utilisez NOM=valeur."
+    }
+    $name = $Matches[1]
+    $value = $Matches[2].Trim()
+    if ($value.Length -ge 2 -and
+        (($value.StartsWith('"') -and $value.EndsWith('"')) -or
+         ($value.StartsWith("'") -and $value.EndsWith("'")))) {
+      $value = $value.Substring(1, $value.Length - 2)
+    }
+    # .env local = source de vérité du démarrage (écrase une valeur de session obsolète).
+    [Environment]::SetEnvironmentVariable($name, $value, "Process")
+  }
+}
+if (-not $Profile) {
+  $Profile = if ($env:SPRING_PROFILES_ACTIVE) { $env:SPRING_PROFILES_ACTIVE } else { "dev" }
+}
 $Java21 = "C:\Program Files\Eclipse Adoptium\jdk-21.0.9.10-hotspot\bin\java.exe"
 $Jar = Join-Path $PSScriptRoot "cmkerp-gateway\target\cmkerp-gateway-4.1.1.jar"
 $OutLog = Join-Path $PSScriptRoot "gateway-out.log"

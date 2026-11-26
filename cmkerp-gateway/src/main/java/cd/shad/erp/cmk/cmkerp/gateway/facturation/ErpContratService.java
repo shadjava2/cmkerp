@@ -391,6 +391,38 @@ public class ErpContratService {
     return syncEngine.prepareMissingIntentions(userId, false);
   }
 
+  /**
+   * Reprise manuelle d'une intention outbox (FAILED / UNCERTAIN / SUSPENDED) puis flush worker.
+   */
+  @Transactional
+  public Map<String, Object> retryOutboxItem(long id) {
+    writeGuard.assertChWriteForbidden();
+    Map<String, Object> current = repository.findOutboxById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Intention introuvable."));
+    String status = String.valueOf(current.get("status"));
+    if ("SYNCED".equalsIgnoreCase(status) || "IN_PROGRESS".equalsIgnoreCase(status)
+        || "PENDING".equalsIgnoreCase(status)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Cette intention n’est pas en échec ou en suspension.");
+    }
+    String entity = String.valueOf(current.get("entityType"));
+    if (!writeGuard.beachEntityWriteEnabled(entity)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+          "Écriture Beach non autorisée pour " + entity + ".");
+    }
+    int n = repository.requeueOutboxItem(id);
+    if (n == 0) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "Reprise impossible pour cette intention.");
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("id", id);
+    result.put("entityType", entity);
+    result.put("previousStatus", status);
+    result.put("status", "PENDING");
+    result.put("requeued", true);
+    return withOutboxFlush(result);
+  }
+
   public Map<String, Object> syncSnapshot() {
     return syncEngine.snapshot();
   }
@@ -438,7 +470,7 @@ public class ErpContratService {
 
   private int flushOutboxQuietly() {
     ClinicBeachOutboxWorker worker = outboxWorker.getIfAvailable();
-    if (worker == null || !writeGuard.beachEntityWriteEnabled("TCONTRAT")) {
+    if (worker == null || !writeGuard.beachWriteEnabled() || !writeGuard.beachSyncEnabled()) {
       return 0;
     }
     try {

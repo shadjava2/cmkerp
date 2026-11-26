@@ -172,6 +172,8 @@ public final class ApiPermissionCatalog {
         "FACTURATION_SYNC_VIEW", "SIDEBAR_FACTURATION_SYNCHRONISATION", "FACTURATION_SYNC_HISTORY_VIEW");
     rule("POST", "/api/v1/facturation/clinic-sync/outbox/prepare",
         "FACTURATION_SYNC_RETRY", "FACTURATION_CONTRATS_IMPORT", "FACTURATION_SYNC_IMPORT");
+    rule("POST", "/api/v1/facturation/clinic-sync/outbox",
+        "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/clinic-sync/outbound/apply",
         "FACTURATION_SYNC_RETRY", "FACTURATION_SYNC_IMPORT");
     rule("POST", "/api/v1/facturation/clinic-sync/inbound/apply",
@@ -217,16 +219,24 @@ public final class ApiPermissionCatalog {
     // Ayants droit — API métier dédiée (erp_ayants_droit + outbox TAYANTDROIT)
     rule("GET", "/api/v1/facturation/ayants/meta",
         "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT",
-        "FACTURATION_AYANTSDROIT_CREATE");
+        "FACTURATION_AYANTSDROIT_CREATE",
+        "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER", "DMI_CARDEX_VIEW");
     rule("GET", "/api/v1/facturation/ayants/lookups",
         "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT",
-        "FACTURATION_AYANTSDROIT_CREATE");
+        "FACTURATION_AYANTSDROIT_CREATE",
+        "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER", "DMI_CARDEX_VIEW");
     rule("GET", "/api/v1/facturation/ayants",
-        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT");
+        "FACTURATION_AYANTSDROIT_VIEW", "SIDEBAR_FACTURATION_AYANTSDROIT",
+        "DMI_CARDEX_VIEW", "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER");
     rule("POST", "/api/v1/facturation/ayants",
-        "FACTURATION_AYANTSDROIT_CREATE");
+        "FACTURATION_AYANTSDROIT_CREATE",
+        "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER");
     rule("PUT", "/api/v1/facturation/ayants",
-        "FACTURATION_AYANTSDROIT_UPDATE", "FACTURATION_AYANTSDROIT_STATUS_UPDATE");
+        "FACTURATION_AYANTSDROIT_UPDATE", "FACTURATION_AYANTSDROIT_STATUS_UPDATE",
+        "DMI_ACCUEIL_NOUVEAU_DOSSIER", "DMI_CARDEX_NOUVEAU_DOSSIER");
+    rule("GET", "/api/v1/facturation/mappings/societe-comptes/suggestions",
+        "FACTURATION_SOCIETES_VIEW", "FACTURATION_SOCIETES_UPDATE",
+        "SIDEBAR_FACTURATION_SOCIETES");
 
     // Consolidation UAT : rapprochement Mediline + imports historiques (lecture Beach → MySQL)
     rule("GET", "/api/v1/facturation/patients/match",

@@ -112,6 +112,11 @@ public class FacturationContratController {
     return ResponseEntity.ok(service.prepareSuspendedIntentions(userId));
   }
 
+  @PostMapping("/clinic-sync/outbox/{id}/retry")
+  public ResponseEntity<Map<String, Object>> retryOutbox(@PathVariable long id) {
+    return ResponseEntity.ok(service.retryOutboxItem(id));
+  }
+
   @GetMapping("/clinic-sync/snapshot")
   public ResponseEntity<Map<String, Object>> syncSnapshot() {
     return ResponseEntity.ok(service.syncSnapshot());
