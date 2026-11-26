@@ -20,6 +20,8 @@ CMK ERP est **une seule application**, plusieurs espaces métier. On change de m
 
 **Recherche patient** : un seul moteur Mediline (`buildPatientQuickSearchCriteria` + `POST /api/v1/cardex/patients/recherche` + `PatientSearchPanel` / `PatientPicker`). Modes NAVIGATION (DMI) et SELECTION (formulaires ERP). Interdit de dupliquer la logique de recherche.
 
+**Chantier 02 (DMI × Facturation)** : `POST /api/v1/dmi/registrations`, registre `erp_patient_registration`, mapping société ↔ compte Mediline (V36). Voir `docs/integration/CHANTIER02_DMI_FACTURATION_INTEGRATION_REPORT.md`.
+
 **Sélecteurs FK** : petit référentiel → ComboBox ; volume moyen → `ErpSearchableCombobox` ; complexe → Picker. Interdit : input de recherche + `<select>` pour la même clé étrangère.
 
 ### Migration CLINIQUE (coexistence)
