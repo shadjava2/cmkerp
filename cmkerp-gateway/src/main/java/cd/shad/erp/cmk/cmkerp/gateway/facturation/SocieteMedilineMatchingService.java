@@ -436,16 +436,16 @@ public class SocieteMedilineMatchingService {
 
   private boolean compteExists(String code) {
     Integer n = medilineJdbc.queryForObject(
-        "SELECT COUNT(*) FROM t_compte WHERE CODE = ?", Integer.class, code);
+        "SELECT COUNT(*) FROM t_compte WHERE TRIM(CODE) = ?", Integer.class, code.trim());
     return n != null && n > 0;
   }
 
   private java.util.Optional<String> loadCompteIntitule(String code) {
     try {
       List<String> rows = medilineJdbc.query(
-          "SELECT INTITULE FROM t_compte WHERE CODE = ? LIMIT 1",
+          "SELECT INTITULE FROM t_compte WHERE TRIM(CODE) = ? LIMIT 1",
           (rs, i) -> rs.getString(1),
-          code);
+          code.trim());
       return rows.stream().findFirst().map(s -> s == null ? null : s.trim()).filter(s -> s != null && !s.isEmpty());
     } catch (Exception ex) {
       return java.util.Optional.empty();

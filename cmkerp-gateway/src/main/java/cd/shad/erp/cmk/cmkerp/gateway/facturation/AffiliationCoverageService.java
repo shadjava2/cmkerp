@@ -149,11 +149,27 @@ public class AffiliationCoverageService {
     if (compteCode != null && medilineJdbc != null) {
       var compteRow = loadCompte(compteCode);
       if (compteRow.isEmpty()) {
-        errors.add(
-            "COMPTE_MEDILINE_INTROUVABLE: Le compte Mediline « "
-                + compteCode
-                + " » n’existe pas. Vérifiez l’association société → compte.");
+        var byIntitule = findUniqueCompteByIntitule(compteCode);
+        if (byIntitule.isPresent()) {
+          String realCode = str(byIntitule.get().get("code"));
+          errors.add(
+              "COMPTE_MEDILINE_CODE_ERRONE: L’association ERP utilise « "
+                  + compteCode
+                  + " », qui est un intitulé Mediline et non un CODE. "
+                  + "Le compte réel est « "
+                  + realCode
+                  + " — "
+                  + compteCode
+                  + " ». Corrigez la correspondance Société — Mediline.");
+        } else {
+          errors.add(
+              "COMPTE_MEDILINE_INTROUVABLE: Le compte Mediline « "
+                  + compteCode
+                  + " » n’existe pas (CODE). Vérifiez l’association société → compte.");
+        }
       } else {
+        // Toujours exposer le CODE Mediline réel (TRIM), pas une valeur ERP erronée.
+        compteCode = str(compteRow.get().get("code"));
         compteIntitule = str(compteRow.get().get("intitule"));
         compteCategorie = str(compteRow.get().get("categorie"));
         if (categorieCode != null
@@ -257,24 +273,57 @@ public class AffiliationCoverageService {
   }
 
   private Optional<Map<String, Object>> loadCompte(String compteCode) {
+    if (compteCode == null || compteCode.isBlank() || medilineJdbc == null) {
+      return Optional.empty();
+    }
     try {
       List<Map<String, Object>> rows = medilineJdbc.query(
           """
               SELECT CODE AS code, INTITULE AS intitule, CATEGORIE_PATIENT AS categorie
-              FROM t_compte WHERE CODE = ? LIMIT 1
+              FROM t_compte
+              WHERE TRIM(CODE) = ?
+              LIMIT 1
               """,
-          (rs, i) -> {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("code", trim(rs.getString("code")));
-            row.put("intitule", trim(rs.getString("intitule")));
-            row.put("categorie", trim(rs.getString("categorie")));
-            return row;
-          },
-          compteCode);
+          (rs, i) -> mapCompteRow(rs),
+          compteCode.trim());
       return rows.stream().findFirst();
     } catch (Exception ex) {
       return Optional.empty();
     }
+  }
+
+  /**
+   * Si l'ERP a stocké un intitulé à la place du CODE Mediline, retrouve le compte unique.
+   */
+  private Optional<Map<String, Object>> findUniqueCompteByIntitule(String label) {
+    if (label == null || label.isBlank() || medilineJdbc == null) {
+      return Optional.empty();
+    }
+    try {
+      List<Map<String, Object>> rows = medilineJdbc.query(
+          """
+              SELECT CODE AS code, INTITULE AS intitule, CATEGORIE_PATIENT AS categorie
+              FROM t_compte
+              WHERE TRIM(INTITULE) = ?
+              LIMIT 3
+              """,
+          (rs, i) -> mapCompteRow(rs),
+          label.trim());
+      if (rows.size() == 1) {
+        return Optional.of(rows.getFirst());
+      }
+      return Optional.empty();
+    } catch (Exception ex) {
+      return Optional.empty();
+    }
+  }
+
+  private static Map<String, Object> mapCompteRow(java.sql.ResultSet rs) throws java.sql.SQLException {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("code", trim(rs.getString("code")));
+    row.put("intitule", trim(rs.getString("intitule")));
+    row.put("categorie", trim(rs.getString("categorie")));
+    return row;
   }
 
   /** Extrait le nom de famille (premier token) d'un nom complet ERP. */
