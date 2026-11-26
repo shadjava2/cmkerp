@@ -41,6 +41,23 @@ class ClinicReferentialLot4CatalogTest {
   }
 
   @Test
+  void ayantDroitAcceptsDateOnlyBirthDate() {
+    Definition def = ClinicReferentialCatalog.byKey("ayants-droit").orElseThrow();
+    Map<String, Object> normalized = ClinicReferentialValues.normalize(
+        def,
+        Map.of(
+            "MATRICULE", "26PP07848",
+            "NOM", "TEST",
+            "DATENAIS", "2024-11-01",
+            "DATSAIS", "2026-11-26T08:13:46",
+            "SEXE", "M"),
+        false,
+        false);
+    assertEquals("2024-11-01T00:00:00", normalized.get("DATENAIS"));
+    assertEquals("2026-11-26T08:13:46", normalized.get("DATSAIS"));
+  }
+
+  @Test
   void supervisionSkipsDetailedCompareForVeryLargeReferentials() {
     assertTrue(ClinicReferentialCatalog.SUPERVISION_DETAILED_COMPARE_LIMIT < 30_000);
     assertTrue(ClinicReferentialCatalog.SUPERVISION_DETAILED_COMPARE_LIMIT >= 1000);

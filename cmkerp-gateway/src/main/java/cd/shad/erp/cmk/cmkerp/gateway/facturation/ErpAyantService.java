@@ -439,7 +439,7 @@ public class ErpAyantService {
     fields.put("CODEFAM", codeFam);
     fields.put("CODESOC", truncate(codeSoc, 4));
     fields.put("CONTRAT", truncate(contrat, 3));
-    fields.put("DATSAIS", LocalDateTime.now().toString());
+    fields.put("DATSAIS", LocalDateTime.now().withNano(0).format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")));
     fields.put("SOURCE", truncate(source, 3));
     try {
       fields.put("LOCATION", location == null || location.isBlank() ? null : Integer.parseInt(location.trim()));

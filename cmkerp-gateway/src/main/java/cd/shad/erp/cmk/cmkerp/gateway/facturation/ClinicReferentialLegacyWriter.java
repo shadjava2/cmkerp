@@ -154,7 +154,16 @@ public class ClinicReferentialLegacyWriter {
       case INT -> value instanceof Number n ? n.intValue() : Integer.valueOf(String.valueOf(value));
       case DECIMAL -> value instanceof Number n ? n.doubleValue() : Double.valueOf(String.valueOf(value));
       case BIT -> value instanceof Boolean b ? b : Boolean.valueOf(String.valueOf(value));
-      case DATETIME -> Timestamp.valueOf(LocalDateTime.parse(String.valueOf(value).replace(' ', 'T').substring(0, 19)));
+      case DATETIME -> {
+        String raw = String.valueOf(value).trim().replace(' ', 'T');
+        if (raw.length() == 10) {
+          yield Timestamp.valueOf(LocalDateTime.parse(raw + "T00:00:00"));
+        }
+        if (raw.length() > 19) {
+          raw = raw.substring(0, 19);
+        }
+        yield Timestamp.valueOf(LocalDateTime.parse(raw));
+      }
     };
   }
 }

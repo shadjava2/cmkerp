@@ -3,6 +3,7 @@ package cd.shad.erp.cmk.cmkerp.gateway.facturation;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -193,14 +194,28 @@ public final class ClinicReferentialValues {
     if (raw instanceof java.sql.Timestamp timestamp) {
       return timestamp.toLocalDateTime().withNano(0).format(ISO);
     }
+    if (raw instanceof java.sql.Date sqlDate) {
+      return sqlDate.toLocalDate().atStartOfDay().format(ISO);
+    }
     if (raw instanceof LocalDateTime dateTime) {
       return dateTime.withNano(0).format(ISO);
+    }
+    if (raw instanceof LocalDate localDate) {
+      return localDate.atStartOfDay().format(ISO);
     }
     String text = String.valueOf(raw).trim();
     if (text.isEmpty()) {
       return null;
     }
     String normalized = text.replace(' ', 'T');
+    // Date seule (DATENAIS) — accepter yyyy-MM-dd sans heure.
+    if (normalized.length() == 10) {
+      try {
+        return LocalDate.parse(normalized).atStartOfDay().format(ISO);
+      } catch (DateTimeParseException ex) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Date invalide.");
+      }
+    }
     if (normalized.length() >= 19) {
       normalized = normalized.substring(0, 19);
     }
