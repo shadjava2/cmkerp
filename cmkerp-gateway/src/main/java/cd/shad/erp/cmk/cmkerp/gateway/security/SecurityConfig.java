@@ -114,6 +114,7 @@ public class SecurityConfig {
             .requestMatchers(AUTH_PATTERN).permitAll().requestMatchers(HEALTH_BASE).permitAll() // /api/v1/health
             .requestMatchers(STOCK_INTELLIGENCE_WHATSAPP_WEBHOOK, STOCK_INTELLIGENCE_WHATSAPP_WEBHOOK + "/**").permitAll()
             .requestMatchers(PORTAIL_FOURNISSEUR_BASE, PORTAIL_FOURNISSEUR_BASE + "/**").permitAll()
+            .requestMatchers("/api/v1/portail-rdv/**").permitAll()
             .requestMatchers("/actuator/health").permitAll().requestMatchers("/actuator/info")
             .permitAll().requestMatchers("/debug/**").permitAll()
             .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()

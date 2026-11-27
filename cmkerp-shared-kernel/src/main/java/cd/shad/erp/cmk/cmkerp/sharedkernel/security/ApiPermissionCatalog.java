@@ -19,6 +19,8 @@ public final class ApiPermissionCatalog {
   private static final List<Rule> RULES = new ArrayList<>();
 
   static {
+    rule("POST", "/api/v1/dmi/rendez-vous/creneaux", "DMI_RECEPTION_RENDEZ_VOUS");
+    rule("GET", "/api/v1/dmi/rendez-vous", "DMI_RECEPTION_RENDEZ_VOUS", "DMI_CABINET_RENDEZ_VOUS_VIEW");
     // --- Stock / mouvements ---
     rule("GET", "/api/v1/stocks", "MODULE_STOCK", "OUVRIR_MODULE_STOCK", "STOCK_VIEW");
     rule("*", "/api/v1/stocks/products", "STOCK_PRODUIT_VIEW", "MODULE_STOCK", "OUVRIR_MODULE_STOCK");
@@ -344,6 +346,7 @@ public final class ApiPermissionCatalog {
     return p.startsWith("/api/v1/auth")
         || p.equals("/api/v1/health")
         || p.startsWith("/api/v1/portail-fournisseur")
+        || p.startsWith("/api/v1/portail-rdv/")
         || p.startsWith("/api/v1/stock-intelligence/whatsapp/webhook")
         || p.startsWith("/actuator/health")
         || p.startsWith("/actuator/info")

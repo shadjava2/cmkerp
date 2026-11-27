@@ -37,6 +37,9 @@ Légende : `OK` | `PARTIEL` | `MANQUANT`
 | Utiliser dossier existant | `DMI_PATIENT_DUPLICATE_USE_EXISTING` | DMI | OK — action Cardex |
 | Continuer malgré doublon fort | `DMI_PATIENT_DUPLICATE_OVERRIDE` | DMI | OK — justification + audit `erp_patient_duplicate_decision` |
 | Audit décisions anti-doublons | `DMI_PATIENT_DUPLICATE_AUDIT_VIEW` | DMI | OK — permission catalogue |
+| Publication d’un créneau de rendez-vous | `DMI_RECEPTION_RENDEZ_VOUS` | Réception | `POST /api/v1/dmi/rendez-vous/creneaux` |
+| Registre des rendez-vous | `DMI_RECEPTION_RENDEZ_VOUS` ou `DMI_CABINET_RENDEZ_VOUS_VIEW` | DMI | `GET /api/v1/dmi/rendez-vous` ; dossier des réservations par jour avec périmètre médecin pour le Cabinet. |
+| Portail Rendez-vous | Créneaux et demandes de lien publics. Session patient séparée après vérification de l’e-mail. | Grand public | `/api/v1/portail-rdv/**` ; accès par adresse vérifiée pour gérer les rendez-vous et lier un dossier. |
 | Prestations | `SIDEBAR_FACTURATION_PRESTATIONS` | `MODULE_FACTURATION` | PARTIEL (shell) |
 | Médicaments | `SIDEBAR_FACTURATION_MEDICAMENTS` | `MODULE_FACTURATION` | OK |
 | Actions ventes médicaments | `STOCK_VENTE_VIEW` / `STOCK_VENTE_CREATE` | `MODULE_STOCK` (API partagée) | OK — réutilisation |
